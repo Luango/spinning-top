@@ -604,8 +604,8 @@
         const tiltAmount = eased * (Math.PI / 3.5); // ~51 degrees
 
         // Apply tilt in the direction of targetFallAngle
-        topGroup.rotation.x = -Math.sin(targetFallAngle) * tiltAmount;
-        topGroup.rotation.z = Math.cos(targetFallAngle) * tiltAmount;
+        topGroup.rotation.x = Math.sin(targetFallAngle) * tiltAmount;
+        topGroup.rotation.z = -Math.cos(targetFallAngle) * tiltAmount;
 
         // Slow residual spin
         topGroup.rotation.y += spinSpeed * dt * (1 - fallProgress);
