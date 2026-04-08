@@ -561,8 +561,9 @@
     tableMesh.position.set(0, 0, 0); tableGroup.add(tableMesh);
     const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x1a0d04, metalness: 0.15, roughness: 0.7 });
-    for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]])
+    for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]]) {
       const leg = new THREE.Mesh(legGeo, legMat); leg.position.set(lx, ly, lz); tableGroup.add(leg);
+    }
 
     // Numbers
     const NUMBER_COUNT = 12, NUMBER_RADIUS = 1.6;
