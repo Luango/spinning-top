@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spinning Top</title>
+  <title>Spinning Top Game</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #000; }
+    body { overflow: hidden; background: #000; font-family: 'Georgia', serif; }
     canvas { display: block; }
     #cursor-dot {
       position: fixed;
@@ -24,11 +24,96 @@
       background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
       z-index: 10;
     }
+    #ui {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      text-align: center;
+    }
+    #spin-btn {
+      padding: 18px 60px;
+      font-size: 22px;
+      font-family: 'Georgia', serif;
+      font-weight: bold;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(135deg, #D4722A, #E88530, #cc6600);
+      border: 2px solid rgba(255, 170, 60, 0.6);
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 30px rgba(255, 120, 30, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    #spin-btn:hover {
+      background: linear-gradient(135deg, #E88530, #ffaa44, #D4722A);
+      box-shadow: 0 0 50px rgba(255, 120, 30, 0.7), inset 0 1px 0 rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+    #spin-btn:active { transform: scale(0.97); }
+    #spin-btn.hidden { display: none; }
+    #result {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      pointer-events: none;
+    }
+    #result.visible { opacity: 1; pointer-events: auto; }
+    #result-number {
+      font-size: 120px;
+      font-weight: bold;
+      color: #ffaa30;
+      text-shadow: 0 0 40px rgba(255, 140, 30, 0.8), 0 0 80px rgba(255, 100, 10, 0.4);
+      line-height: 1;
+    }
+    #result-text {
+      font-size: 24px;
+      color: rgba(255, 200, 140, 0.9);
+      margin-top: 10px;
+      letter-spacing: 2px;
+    }
+    #spin-again-btn {
+      margin-top: 30px;
+      padding: 14px 45px;
+      font-size: 16px;
+      font-family: 'Georgia', serif;
+      font-weight: bold;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(135deg, #D4722A, #E88530);
+      border: 2px solid rgba(255, 170, 60, 0.5);
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 20px rgba(255, 120, 30, 0.3);
+    }
+    #spin-again-btn:hover {
+      box-shadow: 0 0 40px rgba(255, 120, 30, 0.6);
+      transform: scale(1.05);
+    }
   </style>
 </head>
 <body>
   <div id="cursor-dot"></div>
   <div id="vignette"></div>
+
+  <div id="ui">
+    <button id="spin-btn">SPIN</button>
+  </div>
+
+  <div id="result">
+    <div id="result-number"></div>
+    <div id="result-text">is your number</div>
+    <button id="spin-again-btn">SPIN AGAIN</button>
+  </div>
 
   <script type="importmap">
   {
@@ -45,12 +130,27 @@
     import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
     import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
+    // ── UI References ──
+    const spinBtn = document.getElementById('spin-btn');
+    const resultDiv = document.getElementById('result');
+    const resultNumber = document.getElementById('result-number');
+    const spinAgainBtn = document.getElementById('spin-again-btn');
+
+    // ── Game State ──
+    let gameState = 'idle'; // idle, spinning, slowing, falling, result
+    let spinSpeed = 0;
+    let targetFallAngle = 0;   // which direction the top falls (radians)
+    let fallProgress = 0;      // 0 to 1
+    let wobbleAmount = 0.03;
+    let spinStartTime = 0;
+    let resultShown = false;
+
     // ── Scene Setup ──
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000508, 0.035);
+    scene.fog = new THREE.FogExp2(0x000508, 0.025);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 3, 8);
+    camera.position.set(0, 6, 7);
     camera.lookAt(0, 1, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -66,49 +166,38 @@
     composer.addPass(new RenderPass(scene, camera));
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.2,   // strength (toned down for realism)
-      0.5,   // radius
-      0.35   // threshold
+      1.2, 0.5, 0.35
     );
     composer.addPass(bloomPass);
 
-    // ── Lighting (warm orange key + strong blue/purple fill) ──
-    const ambientLight = new THREE.AmbientLight(0x0a0a18, 0.5);
-    scene.add(ambientLight);
+    // ── Lighting ──
+    scene.add(new THREE.AmbientLight(0x0a0a18, 0.5));
 
-    // Main warm key light from above-right
     const mainLight = new THREE.PointLight(0xff7020, 12, 20, 1.5);
     mainLight.position.set(1.5, 4, 1);
     scene.add(mainLight);
 
-    // Strong blue/purple accent from left side
     const accentLight = new THREE.PointLight(0x3322cc, 8, 15, 1.5);
     accentLight.position.set(-3, 2, -1);
     scene.add(accentLight);
 
-    // Secondary warm fill from below-front
     const fillLight = new THREE.PointLight(0xff8040, 6, 12, 1.5);
     fillLight.position.set(0, 0.5, 3);
     scene.add(fillLight);
 
-    // Rim light warm from behind
     const rimLight = new THREE.PointLight(0xff5010, 5, 15, 1.5);
     rimLight.position.set(-1, 1.5, -4);
     scene.add(rimLight);
 
-    // Top-down subtle warm glow
     const topLight = new THREE.PointLight(0xffaa60, 4, 10, 2);
     topLight.position.set(0, 6, 0);
     scene.add(topLight);
 
     // ── Floor ──
-    const floorGeo = new THREE.PlaneGeometry(50, 50);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x050508,
-      metalness: 0.6,
-      roughness: 0.5,
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(50, 50),
+      new THREE.MeshStandardMaterial({ color: 0x050508, metalness: 0.6, roughness: 0.5 })
+    );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1.5;
     scene.add(floor);
@@ -117,78 +206,106 @@
     const tableGroup = new THREE.Group();
     scene.add(tableGroup);
 
-    // Table top
-    const tableTopGeo = new THREE.BoxGeometry(5, 0.1, 3.5);
-    const tableTopMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1506,
-      metalness: 0.1,
-      roughness: 0.65,
-    });
-    const tableTop = new THREE.Mesh(tableTopGeo, tableTopMat);
-    tableTop.position.y = 0;
-    tableTop.receiveShadow = true;
-    tableGroup.add(tableTop);
+    const tableTopMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(5, 0.1, 3.5),
+      new THREE.MeshStandardMaterial({ color: 0x2a1506, metalness: 0.1, roughness: 0.65 })
+    );
+    tableTopMesh.position.y = 0;
+    tableGroup.add(tableTopMesh);
 
-    // Table legs
     const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
-    const legMat = new THREE.MeshStandardMaterial({
-      color: 0x1a0d04,
-      metalness: 0.15,
-      roughness: 0.7,
-    });
-    const legPositions = [
-      [-2.3, -0.75, -1.5],
-      [2.3, -0.75, -1.5],
-      [-2.3, -0.75, 1.5],
-      [2.3, -0.75, 1.5],
-    ];
-    for (const [lx, ly, lz] of legPositions) {
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x1a0d04, metalness: 0.15, roughness: 0.7 });
+    for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]]) {
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(lx, ly, lz);
       tableGroup.add(leg);
     }
 
-    // ── Spinning Top Geometry (LatheGeometry) ──
+    // ── Number Circle on Table ──
+    const NUMBER_COUNT = 12;
+    const NUMBER_RADIUS = 1.6;
+    const numberMeshes = [];
+
+    function createNumberTexture(num) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 128, 128);
+      // Glow circle background
+      const grd = ctx.createRadialGradient(64, 64, 10, 64, 64, 60);
+      grd.addColorStop(0, 'rgba(255, 140, 30, 0.15)');
+      grd.addColorStop(1, 'rgba(255, 100, 10, 0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(64, 64, 60, 0, Math.PI * 2);
+      ctx.fill();
+      // Number text
+      ctx.font = 'bold 72px Georgia';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffaa30';
+      ctx.shadowColor = 'rgba(255, 120, 20, 0.8)';
+      ctx.shadowBlur = 15;
+      ctx.fillText(String(num), 64, 64);
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    for (let i = 0; i < NUMBER_COUNT; i++) {
+      const angle = (i / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2; // start from top
+      const tex = createNumberTexture(i + 1);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.45), mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(
+        Math.cos(angle) * NUMBER_RADIUS,
+        0.06,
+        Math.sin(angle) * NUMBER_RADIUS
+      );
+      mesh.userData.number = i + 1;
+      mesh.userData.angle = angle;
+      scene.add(mesh);
+      numberMeshes.push(mesh);
+    }
+
+    // ── Spinning Top ──
     const topGroup = new THREE.Group();
-    topGroup.position.y = 0.05; // sit on table surface
+    topGroup.position.y = 0.05;
     scene.add(topGroup);
 
-    // Profile points for the spinning top silhouette
     const points = [];
-    // Bottom tip (sharp point)
     points.push(new THREE.Vector2(0, 0));
     points.push(new THREE.Vector2(0.02, 0.05));
     points.push(new THREE.Vector2(0.06, 0.15));
-    // Curve outward to the disc
     points.push(new THREE.Vector2(0.15, 0.35));
     points.push(new THREE.Vector2(0.35, 0.55));
     points.push(new THREE.Vector2(0.55, 0.7));
     points.push(new THREE.Vector2(0.7, 0.8));
     points.push(new THREE.Vector2(0.8, 0.88));
     points.push(new THREE.Vector2(0.82, 0.92));
-    // Disc edge (widest part)
     points.push(new THREE.Vector2(0.83, 0.95));
     points.push(new THREE.Vector2(0.82, 0.98));
-    // Curve back inward above disc
     points.push(new THREE.Vector2(0.78, 1.02));
     points.push(new THREE.Vector2(0.65, 1.08));
     points.push(new THREE.Vector2(0.45, 1.15));
     points.push(new THREE.Vector2(0.3, 1.22));
-    // Neck
     points.push(new THREE.Vector2(0.15, 1.4));
     points.push(new THREE.Vector2(0.1, 1.6));
     points.push(new THREE.Vector2(0.08, 1.9));
-    // Stem widening
     points.push(new THREE.Vector2(0.09, 2.2));
     points.push(new THREE.Vector2(0.12, 2.5));
     points.push(new THREE.Vector2(0.15, 2.7));
-    // Handle bulge
     points.push(new THREE.Vector2(0.18, 2.85));
     points.push(new THREE.Vector2(0.2, 2.95));
     points.push(new THREE.Vector2(0.2, 3.05));
     points.push(new THREE.Vector2(0.18, 3.15));
     points.push(new THREE.Vector2(0.14, 3.25));
-    // Top tip
     points.push(new THREE.Vector2(0.08, 3.35));
     points.push(new THREE.Vector2(0.03, 3.45));
     points.push(new THREE.Vector2(0, 3.5));
@@ -196,82 +313,72 @@
     const topGeo = new THREE.LatheGeometry(points, 128);
     topGeo.computeVertexNormals();
 
-    // Create environment map for reflections
     const cubeRT = new THREE.WebGLCubeRenderTarget(512);
     const cubeCamera = new THREE.CubeCamera(0.1, 100, cubeRT);
     scene.add(cubeCamera);
 
-    // MeshPhysicalMaterial for realistic copper/bronze look
     const topMat = new THREE.MeshPhysicalMaterial({
-      color: 0xD4722A,          // warm copper/bronze
+      color: 0xD4722A,
       metalness: 1.0,
-      roughness: 0.05,          // very smooth, polished
+      roughness: 0.05,
       envMap: cubeRT.texture,
       envMapIntensity: 3.0,
-      clearcoat: 1.0,           // glossy lacquer layer
+      clearcoat: 1.0,
       clearcoatRoughness: 0.02,
       reflectivity: 1.0,
       ior: 2.5,
     });
 
     const topMesh = new THREE.Mesh(topGeo, topMat);
-    topMesh.castShadow = true;
     topGroup.add(topMesh);
 
-    // Disc ring detail - a torus at the widest part
-    const ringGeo = new THREE.TorusGeometry(0.83, 0.03, 24, 128);
-    const ringMat = new THREE.MeshPhysicalMaterial({
-      color: 0xE88530,
-      metalness: 1.0,
-      roughness: 0.03,
-      emissive: 0xcc6600,
-      emissiveIntensity: 0.3,
-      envMap: cubeRT.texture,
-      envMapIntensity: 2.5,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.01,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.95;
-    topGroup.add(ring);
+    const ringMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(0.83, 0.03, 24, 128),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xE88530,
+        metalness: 1.0,
+        roughness: 0.03,
+        emissive: 0xcc6600,
+        emissiveIntensity: 0.3,
+        envMap: cubeRT.texture,
+        envMapIntensity: 2.5,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.01,
+      })
+    );
+    ringMesh.rotation.x = Math.PI / 2;
+    ringMesh.position.y = 0.95;
+    topGroup.add(ringMesh);
 
-    // ── Particle System (Spark Trails) ──
+    // ── Particle System ──
     const PARTICLE_COUNT = 300;
     const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(PARTICLE_COUNT * 3);
-    const velocities = new Float32Array(PARTICLE_COUNT * 3);
-    const lifetimes = new Float32Array(PARTICLE_COUNT);
-    const maxLifetimes = new Float32Array(PARTICLE_COUNT);
-    const sizes = new Float32Array(PARTICLE_COUNT);
+    const pPositions = new Float32Array(PARTICLE_COUNT * 3);
+    const pVelocities = new Float32Array(PARTICLE_COUNT * 3);
+    const pLifetimes = new Float32Array(PARTICLE_COUNT);
+    const pMaxLifetimes = new Float32Array(PARTICLE_COUNT);
 
     function resetParticle(i) {
       const angle = Math.random() * Math.PI * 2;
       const r = 0.8 + Math.random() * 0.1;
-      positions[i * 3] = Math.cos(angle) * r;
-      positions[i * 3 + 1] = 0.9 + Math.random() * 0.2;
-      positions[i * 3 + 2] = Math.sin(angle) * r;
-
+      pPositions[i * 3] = Math.cos(angle) * r;
+      pPositions[i * 3 + 1] = 0.9 + Math.random() * 0.2;
+      pPositions[i * 3 + 2] = Math.sin(angle) * r;
       const speed = 0.5 + Math.random() * 2.5;
-      const upSpeed = 0.2 + Math.random() * 1.5;
-      velocities[i * 3] = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.5;
-      velocities[i * 3 + 1] = upSpeed;
-      velocities[i * 3 + 2] = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.5;
-
-      maxLifetimes[i] = 0.5 + Math.random() * 1.5;
-      lifetimes[i] = maxLifetimes[i];
-      sizes[i] = 2 + Math.random() * 6;
+      pVelocities[i * 3] = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.5;
+      pVelocities[i * 3 + 1] = 0.2 + Math.random() * 1.5;
+      pVelocities[i * 3 + 2] = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.5;
+      pMaxLifetimes[i] = 0.5 + Math.random() * 1.5;
+      pLifetimes[i] = pMaxLifetimes[i];
     }
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       resetParticle(i);
-      lifetimes[i] = Math.random() * maxLifetimes[i]; // stagger initial
+      pLifetimes[i] = Math.random() * pMaxLifetimes[i];
     }
 
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particleGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
 
-    // Create spark texture
     const sparkCanvas = document.createElement('canvas');
     sparkCanvas.width = 64;
     sparkCanvas.height = 64;
@@ -283,10 +390,9 @@
     grad.addColorStop(1, 'rgba(255, 40, 0, 0)');
     sparkCtx.fillStyle = grad;
     sparkCtx.fillRect(0, 0, 64, 64);
-    const sparkTexture = new THREE.CanvasTexture(sparkCanvas);
 
     const particleMat = new THREE.PointsMaterial({
-      map: sparkTexture,
+      map: new THREE.CanvasTexture(sparkCanvas),
       size: 0.15,
       sizeAttenuation: true,
       transparent: true,
@@ -298,16 +404,14 @@
     const particles = new THREE.Points(particleGeo, particleMat);
     scene.add(particles);
 
-    // ── Trail Lines (elongated spark streaks) ──
-    const trailCount = 40;
+    // ── Trail Streaks ──
     const trails = [];
     const trailGroup = new THREE.Group();
     scene.add(trailGroup);
 
-    for (let i = 0; i < trailCount; i++) {
+    for (let i = 0; i < 40; i++) {
       const len = 0.3 + Math.random() * 1.2;
-      const trailGeo = new THREE.PlaneGeometry(0.02, len);
-      const trailMat = new THREE.MeshBasicMaterial({
+      const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color().setHSL(0.07 + Math.random() * 0.05, 1.0, 0.5 + Math.random() * 0.3),
         transparent: true,
         opacity: 0.4 + Math.random() * 0.5,
@@ -315,145 +419,265 @@
         depthWrite: false,
         side: THREE.DoubleSide,
       });
-      const trail = new THREE.Mesh(trailGeo, trailMat);
-
+      const trail = new THREE.Mesh(new THREE.PlaneGeometry(0.02, len), mat);
       const angle = Math.random() * Math.PI * 2;
-      const dist = 1.5 + Math.random() * 5;
-      trail.position.set(
-        Math.cos(angle) * dist,
-        0.3 + Math.random() * 3,
-        Math.sin(angle) * dist - 2
-      );
+      const dist = 2.5 + Math.random() * 5;
+      trail.position.set(Math.cos(angle) * dist, 0.3 + Math.random() * 3, Math.sin(angle) * dist);
       trail.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-      trail.userData = {
-        angle,
-        dist,
-        speed: 0.1 + Math.random() * 0.4,
-        baseY: trail.position.y,
-        phase: Math.random() * Math.PI * 2,
-      };
+      trail.userData = { angle, dist, speed: 0.1 + Math.random() * 0.4, baseY: trail.position.y, phase: Math.random() * Math.PI * 2 };
       trailGroup.add(trail);
       trails.push(trail);
     }
 
-    // ── Decorative Orbit Circles (wireframe) ──
+    // ── Decorative Orbit Circles ──
     const circleGroup = new THREE.Group();
     circleGroup.position.set(-3.5, 3, 0);
     scene.add(circleGroup);
 
-    const circle1Geo = new THREE.RingGeometry(0.45, 0.48, 64);
-    const circle1Mat = new THREE.MeshBasicMaterial({
-      color: 0xff8833,
-      transparent: true,
-      opacity: 0.6,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-    const circle1 = new THREE.Mesh(circle1Geo, circle1Mat);
-    circleGroup.add(circle1);
+    const c1 = new THREE.Mesh(
+      new THREE.RingGeometry(0.45, 0.48, 64),
+      new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+    );
+    circleGroup.add(c1);
 
-    const circle2Geo = new THREE.RingGeometry(0.55, 0.57, 64);
-    const circle2Mat = new THREE.MeshBasicMaterial({
-      color: 0xff8833,
-      transparent: true,
-      opacity: 0.4,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-    const circle2 = new THREE.Mesh(circle2Geo, circle2Mat);
-    circle2.rotation.x = 0.3;
-    circle2.rotation.y = 0.5;
-    circleGroup.add(circle2);
+    const c2 = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.57, 64),
+      new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.4, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+    );
+    c2.rotation.x = 0.3;
+    c2.rotation.y = 0.5;
+    circleGroup.add(c2);
 
-    // Small orbiting dot
-    const dotGeo = new THREE.SphereGeometry(0.04, 8, 8);
-    const dotMat = new THREE.MeshBasicMaterial({ color: 0xffaa55 });
-    const orbitDot = new THREE.Mesh(dotGeo, dotMat);
+    const orbitDot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.04, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffaa55 })
+    );
     circleGroup.add(orbitDot);
 
     // ── Cursor Follower ──
     const cursorDot = document.getElementById('cursor-dot');
-    let mouseX = 0, mouseY = 0;
     document.addEventListener('mousemove', (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      cursorDot.style.left = mouseX + 'px';
-      cursorDot.style.top = mouseY + 'px';
+      cursorDot.style.left = e.clientX + 'px';
+      cursorDot.style.top = e.clientY + 'px';
     });
 
-    // ── Reflection pass (simple: render top once for env map) ──
-    let envUpdateCounter = 0;
+    // ── Game Logic ──
+    function startSpin() {
+      gameState = 'spinning';
+      spinSpeed = 12 + Math.random() * 6; // 12-18 rad/s
+      wobbleAmount = 0.02;
+      fallProgress = 0;
+      resultShown = false;
+      spinStartTime = clock.getElapsedTime();
+
+      // Pick random target number (1-12) and its angle
+      const targetNum = Math.floor(Math.random() * 12);
+      targetFallAngle = (targetNum / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2;
+
+      // Reset top upright
+      topGroup.position.y = 0.05;
+      topGroup.rotation.x = 0;
+      topGroup.rotation.z = 0;
+
+      // Hide UI
+      spinBtn.classList.add('hidden');
+      resultDiv.classList.remove('visible');
+
+      // Show particles
+      particles.visible = true;
+    }
+
+    function resetGame() {
+      gameState = 'idle';
+      spinSpeed = 0;
+      fallProgress = 0;
+      wobbleAmount = 0.03;
+      topGroup.rotation.x = 0;
+      topGroup.rotation.z = 0;
+      topGroup.position.y = 0.05;
+
+      resultDiv.classList.remove('visible');
+      spinBtn.classList.remove('hidden');
+      particles.visible = true;
+    }
+
+    function getResultNumber() {
+      // The top falls toward targetFallAngle, find closest number
+      let bestDist = Infinity;
+      let bestNum = 1;
+      for (const nm of numberMeshes) {
+        let diff = Math.abs(nm.userData.angle - targetFallAngle);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < bestDist) {
+          bestDist = diff;
+          bestNum = nm.userData.number;
+        }
+      }
+      return bestNum;
+    }
+
+    function showResult() {
+      if (resultShown) return;
+      resultShown = true;
+      const num = getResultNumber();
+      resultNumber.textContent = num;
+      resultDiv.classList.add('visible');
+    }
+
+    spinBtn.addEventListener('click', startSpin);
+    spinAgainBtn.addEventListener('click', resetGame);
+
+
+    // ── Camera targets ──
+    const camIdlePos = new THREE.Vector3(0, 6, 7);
+    const camSpinPos = new THREE.Vector3(0, 8, 5);
+    const camTarget = new THREE.Vector3();
+    const camCurrentPos = new THREE.Vector3().copy(camIdlePos);
 
     // ── Animation Loop ──
     const clock = new THREE.Clock();
+    let envUpdateCounter = 0;
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
       const elapsed = clock.getElapsedTime();
 
-      // Spinning top rotation
-      topGroup.rotation.y += 4.0 * dt;
-      // Subtle precession wobble
-      topGroup.rotation.x = Math.sin(elapsed * 0.5) * 0.03;
-      topGroup.rotation.z = Math.cos(elapsed * 0.7) * 0.03;
+      // ── Game State Machine ──
+      if (gameState === 'idle') {
+        // Gentle idle wobble, no spin
+        topGroup.rotation.y += 0.3 * dt;
+        topGroup.rotation.x = Math.sin(elapsed * 0.8) * wobbleAmount;
+        topGroup.rotation.z = Math.cos(elapsed * 1.1) * wobbleAmount;
+        camTarget.copy(camIdlePos);
+        particles.visible = false;
 
-      // Camera slow orbit
-      const camAngle = elapsed * 0.08;
-      camera.position.x = Math.sin(camAngle) * 8;
-      camera.position.z = Math.cos(camAngle) * 8;
-      camera.position.y = 2.5 + Math.sin(elapsed * 0.15) * 0.5;
-      camera.lookAt(0, 1.5, 0);
+      } else if (gameState === 'spinning') {
+        // Fast spin, minimal wobble
+        topGroup.rotation.y += spinSpeed * dt;
+        topGroup.rotation.x = Math.sin(elapsed * 2) * 0.01;
+        topGroup.rotation.z = Math.cos(elapsed * 2.5) * 0.01;
+        camTarget.copy(camSpinPos);
 
-      // Light flicker
+        // After 1.5s of full speed, start slowing
+        if (elapsed - spinStartTime > 1.5) {
+          gameState = 'slowing';
+        }
+
+      } else if (gameState === 'slowing') {
+        // Decelerate with strong friction
+        spinSpeed *= Math.pow(0.3, dt); // exponential decay, halves in ~1s
+        topGroup.rotation.y += spinSpeed * dt;
+
+        // Wobble increases as speed decreases
+        const slowRatio = Math.max(0, 1 - spinSpeed / 12);
+        wobbleAmount = 0.02 + slowRatio * 0.18;
+        topGroup.rotation.x = Math.sin(elapsed * 1.5) * wobbleAmount;
+        topGroup.rotation.z = Math.cos(elapsed * 2.0) * wobbleAmount;
+
+        camTarget.copy(camSpinPos);
+
+        // Transition to falling when slow enough
+        if (spinSpeed < 1.0) {
+          gameState = 'falling';
+          fallProgress = 0;
+        }
+
+      } else if (gameState === 'falling') {
+        // Top tilts and falls toward targetFallAngle
+        fallProgress += dt * 1.0; // takes ~1s to fall
+        fallProgress = Math.min(fallProgress, 1);
+
+        // Ease-in for fall (accelerating tilt)
+        const eased = fallProgress * fallProgress;
+        const tiltAmount = eased * (Math.PI / 3.5); // ~51 degrees
+
+        // Apply tilt in the direction of targetFallAngle
+        topGroup.rotation.x = -Math.sin(targetFallAngle) * tiltAmount;
+        topGroup.rotation.z = Math.cos(targetFallAngle) * tiltAmount;
+
+        // Slow residual spin
+        topGroup.rotation.y += spinSpeed * dt * (1 - fallProgress);
+        spinSpeed *= 0.95;
+
+        // Lower the top slightly as it falls
+        topGroup.position.y = 0.05 - eased * 0.6;
+
+        // Camera follows the fall direction
+        const fallDirX = Math.cos(targetFallAngle) * 3;
+        const fallDirZ = Math.sin(targetFallAngle) * 3;
+        camTarget.set(fallDirX + 1, 5, fallDirZ + 5);
+
+        particles.visible = false;
+
+        if (fallProgress >= 1) {
+          gameState = 'result';
+          showResult();
+        }
+
+      } else if (gameState === 'result') {
+        // Hold position
+        const fallDirX = Math.cos(targetFallAngle) * 2;
+        const fallDirZ = Math.sin(targetFallAngle) * 2;
+        camTarget.set(fallDirX + 0.5, 5, fallDirZ + 5);
+      }
+
+      // ── Smooth Camera ──
+      camCurrentPos.lerp(camTarget, dt * 2);
+      camera.position.copy(camCurrentPos);
+      camera.lookAt(0, 1, 0);
+
+      // ── Light flicker ──
       mainLight.intensity = 12 + Math.sin(elapsed * 3) * 2;
 
-      // Update particles
-      const posAttr = particleGeo.getAttribute('position');
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        lifetimes[i] -= dt;
-        if (lifetimes[i] <= 0) {
-          resetParticle(i);
-        } else {
-          positions[i * 3] += velocities[i * 3] * dt;
-          positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
-          positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
-          // Gravity
-          velocities[i * 3 + 1] -= 2.0 * dt;
+      // ── Particles ──
+      if (particles.visible) {
+        const posAttr = particleGeo.getAttribute('position');
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          pLifetimes[i] -= dt;
+          if (pLifetimes[i] <= 0) {
+            resetParticle(i);
+          } else {
+            pPositions[i * 3] += pVelocities[i * 3] * dt;
+            pPositions[i * 3 + 1] += pVelocities[i * 3 + 1] * dt;
+            pPositions[i * 3 + 2] += pVelocities[i * 3 + 2] * dt;
+            pVelocities[i * 3 + 1] -= 2.0 * dt;
+          }
         }
+        posAttr.needsUpdate = true;
       }
-      posAttr.needsUpdate = true;
 
-      // Fade particles globally
-      particleMat.opacity = 0.7 + Math.sin(elapsed * 2) * 0.15;
-
-      // Animate trail streaks
+      // ── Trail streaks ──
       for (const trail of trails) {
         const d = trail.userData;
         d.angle += d.speed * dt;
         trail.position.x = Math.cos(d.angle) * d.dist;
-        trail.position.z = Math.sin(d.angle) * d.dist - 2;
+        trail.position.z = Math.sin(d.angle) * d.dist;
         trail.position.y = d.baseY + Math.sin(elapsed + d.phase) * 0.3;
         trail.rotation.z = d.angle + Math.PI / 2;
-        trail.material.opacity = (0.3 + Math.sin(elapsed * 2 + d.phase) * 0.3);
+        trail.material.opacity = 0.3 + Math.sin(elapsed * 2 + d.phase) * 0.3;
       }
 
-      // Animate orbit circles
+      // ── Orbit circles ──
       circleGroup.rotation.z = elapsed * 0.3;
-      const dotAngle = elapsed * 1.2;
-      orbitDot.position.x = Math.cos(dotAngle) * 0.46;
-      orbitDot.position.y = Math.sin(dotAngle) * 0.46;
+      orbitDot.position.x = Math.cos(elapsed * 1.2) * 0.46;
+      orbitDot.position.y = Math.sin(elapsed * 1.2) * 0.46;
 
-      // Update env map more frequently for better reflections
+      // ── Number glow pulse ──
+      for (const nm of numberMeshes) {
+        nm.material.opacity = 0.7 + Math.sin(elapsed * 1.5 + nm.userData.number) * 0.3;
+      }
+
+      // ── Env map update ──
       envUpdateCounter++;
-      if (envUpdateCounter % 6 === 0) {
+      if (envUpdateCounter % 10 === 0) {
         topMesh.visible = false;
-        ring.visible = false;
+        ringMesh.visible = false;
         cubeCamera.position.copy(topGroup.position);
         cubeCamera.position.y = 1.5;
         cubeCamera.update(renderer, scene);
         topMesh.visible = true;
-        ring.visible = true;
+        ringMesh.visible = true;
       }
 
       composer.render();
@@ -461,7 +685,7 @@
 
     animate();
 
-    // ── Resize Handler ──
+    // ── Resize ──
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
