@@ -4,115 +4,228 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spinning Top Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #000; font-family: 'Georgia', serif; }
+    body { overflow: hidden; background: #000; font-family: 'Georgia', serif; color: #fff; }
     canvas { display: block; }
+    .hidden { display: none !important; }
     #cursor-dot {
-      position: fixed;
-      width: 8px;
-      height: 8px;
+      position: fixed; width: 8px; height: 8px;
       background: rgba(255, 160, 50, 0.8);
       transform: translate(-50%, -50%) rotate(45deg);
-      pointer-events: none;
-      z-index: 100;
+      pointer-events: none; z-index: 100;
     }
     #vignette {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       pointer-events: none;
       background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
       z-index: 10;
     }
+
+    /* ── Lobby ── */
+    #lobby {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 50; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85);
+    }
+    .lobby-card {
+      background: linear-gradient(145deg, rgba(40,20,10,0.95), rgba(20,10,5,0.98));
+      border: 1px solid rgba(255,140,40,0.3);
+      border-radius: 20px; padding: 40px; text-align: center;
+      min-width: 380px; box-shadow: 0 0 60px rgba(255,100,20,0.15);
+    }
+    .lobby-card h1 {
+      font-size: 32px; color: #ffaa30; margin-bottom: 8px;
+      text-shadow: 0 0 20px rgba(255,140,30,0.5);
+    }
+    .lobby-card p { color: rgba(255,200,140,0.7); font-size: 14px; margin-bottom: 25px; }
+    .lobby-btn {
+      display: block; width: 100%; padding: 14px; margin: 8px 0;
+      font-family: 'Georgia', serif; font-size: 16px; font-weight: bold;
+      letter-spacing: 3px; text-transform: uppercase; color: #fff;
+      background: linear-gradient(135deg, #D4722A, #E88530);
+      border: 1px solid rgba(255,170,60,0.5); border-radius: 30px;
+      cursor: pointer; transition: all 0.3s;
+      box-shadow: 0 0 15px rgba(255,120,30,0.3);
+    }
+    .lobby-btn:hover { box-shadow: 0 0 30px rgba(255,120,30,0.6); transform: scale(1.03); }
+    .lobby-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .lobby-btn.secondary {
+      background: transparent; border: 1px solid rgba(255,170,60,0.4);
+      box-shadow: none;
+    }
+    .lobby-btn.secondary:hover { background: rgba(255,120,30,0.1); }
+    #join-input {
+      width: 100%; padding: 12px; margin: 8px 0; text-align: center;
+      font-family: 'Georgia', serif; font-size: 18px; letter-spacing: 4px;
+      color: #ffcc55; background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,140,40,0.4); border-radius: 12px;
+      text-transform: uppercase;
+    }
+    #join-input::placeholder { color: rgba(255,200,140,0.3); letter-spacing: 2px; font-size: 14px; }
+    #join-input:focus { outline: none; border-color: rgba(255,140,40,0.8); }
+    #room-code-display {
+      font-size: 36px; color: #ffcc55; letter-spacing: 6px; font-weight: bold;
+      margin: 15px 0; text-shadow: 0 0 15px rgba(255,200,60,0.5);
+    }
+    #player-list { margin: 15px 0; text-align: left; }
+    .player-item {
+      padding: 8px 15px; margin: 4px 0; border-radius: 8px;
+      background: rgba(255,140,40,0.08); border: 1px solid rgba(255,140,40,0.15);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 14px; color: rgba(255,200,140,0.9);
+    }
+    .player-item .host-badge {
+      font-size: 10px; color: #ffaa30; background: rgba(255,140,40,0.2);
+      padding: 2px 8px; border-radius: 10px;
+    }
+    #lobby-status { color: rgba(255,200,140,0.6); font-size: 13px; margin-top: 10px; }
+
+    /* ── In-Game HUD ── */
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 20; padding: 15px 25px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none;
+    }
+    #hud.hidden { display: none; }
+    #turn-info {
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,140,40,0.3);
+      border-radius: 12px; padding: 10px 20px; text-align: center;
+    }
+    #turn-info .turn-label { font-size: 12px; color: rgba(255,200,140,0.6); letter-spacing: 2px; }
+    #turn-info .turn-name { font-size: 18px; color: #ffaa30; font-weight: bold; }
+    #scores-panel {
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,140,40,0.3);
+      border-radius: 12px; padding: 10px 15px; min-width: 150px;
+    }
+    #scores-panel h3 { font-size: 11px; color: rgba(255,200,140,0.5); letter-spacing: 2px; margin-bottom: 5px; }
+    .score-row { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; color: rgba(255,200,140,0.8); }
+    .score-row.active { color: #ffaa30; font-weight: bold; }
+    .score-value { color: #ffcc55; }
+
+    /* ── Spin UI ── */
     #ui {
-      position: fixed;
-      bottom: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      text-align: center;
+      position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+      z-index: 20; text-align: center;
     }
     #spin-btn {
-      padding: 18px 60px;
-      font-size: 22px;
-      font-family: 'Georgia', serif;
-      font-weight: bold;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      color: #fff;
+      padding: 18px 60px; font-size: 22px; font-family: 'Georgia', serif;
+      font-weight: bold; letter-spacing: 4px; text-transform: uppercase; color: #fff;
       background: linear-gradient(135deg, #D4722A, #E88530, #cc6600);
-      border: 2px solid rgba(255, 170, 60, 0.6);
-      border-radius: 50px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 30px rgba(255, 120, 30, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,170,60,0.6); border-radius: 50px;
+      cursor: pointer; transition: all 0.3s;
+      box-shadow: 0 0 30px rgba(255,120,30,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
     }
-    #spin-btn:hover {
-      background: linear-gradient(135deg, #E88530, #ffaa44, #D4722A);
-      box-shadow: 0 0 50px rgba(255, 120, 30, 0.7), inset 0 1px 0 rgba(255,255,255,0.3);
-      transform: scale(1.05);
-    }
+    #spin-btn:hover { background: linear-gradient(135deg, #E88530, #ffaa44, #D4722A); box-shadow: 0 0 50px rgba(255,120,30,0.7); transform: scale(1.05); }
     #spin-btn:active { transform: scale(0.97); }
-    #spin-btn.hidden { display: none; }
+    #waiting-msg {
+      font-size: 20px; color: rgba(255,200,140,0.8); letter-spacing: 2px;
+      text-shadow: 0 0 15px rgba(255,140,30,0.4);
+    }
+
+    /* ── Result ── */
     #result {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 20;
-      text-align: center;
-      opacity: 0;
-      transition: opacity 0.8s ease;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 20; text-align: center; opacity: 0; transition: opacity 0.8s;
       pointer-events: none;
     }
     #result.visible { opacity: 1; pointer-events: auto; }
-    #result-number {
-      font-size: 120px;
-      font-weight: bold;
-      color: #ffaa30;
-      text-shadow: 0 0 40px rgba(255, 140, 30, 0.8), 0 0 80px rgba(255, 100, 10, 0.4);
-      line-height: 1;
-    }
-    #result-text {
-      font-size: 24px;
-      color: rgba(255, 200, 140, 0.9);
-      margin-top: 10px;
-      letter-spacing: 2px;
-    }
-    #spin-again-btn {
-      margin-top: 30px;
-      padding: 14px 45px;
-      font-size: 16px;
-      font-family: 'Georgia', serif;
-      font-weight: bold;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: #fff;
+    #result-number { font-size: 120px; font-weight: bold; color: #ffaa30; text-shadow: 0 0 40px rgba(255,140,30,0.8); line-height: 1; }
+    #result-text { font-size: 24px; color: rgba(255,200,140,0.9); margin-top: 10px; letter-spacing: 2px; }
+    #next-turn-btn {
+      margin-top: 25px; padding: 14px 45px; font-size: 16px;
+      font-family: 'Georgia', serif; font-weight: bold; letter-spacing: 3px;
+      text-transform: uppercase; color: #fff;
       background: linear-gradient(135deg, #D4722A, #E88530);
-      border: 2px solid rgba(255, 170, 60, 0.5);
-      border-radius: 50px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 20px rgba(255, 120, 30, 0.3);
+      border: 2px solid rgba(255,170,60,0.5); border-radius: 50px;
+      cursor: pointer; transition: all 0.3s;
+      box-shadow: 0 0 20px rgba(255,120,30,0.3);
     }
-    #spin-again-btn:hover {
-      box-shadow: 0 0 40px rgba(255, 120, 30, 0.6);
-      transform: scale(1.05);
+    #next-turn-btn:hover { box-shadow: 0 0 40px rgba(255,120,30,0.6); transform: scale(1.05); }
+
+    /* ── Scoreboard ── */
+    #scoreboard {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 40; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85); opacity: 0; transition: opacity 0.5s;
+      pointer-events: none;
     }
+    #scoreboard.visible { opacity: 1; pointer-events: auto; }
+    .sb-card {
+      background: linear-gradient(145deg, rgba(40,20,10,0.95), rgba(20,10,5,0.98));
+      border: 1px solid rgba(255,140,40,0.3); border-radius: 20px;
+      padding: 40px; text-align: center; min-width: 350px;
+    }
+    .sb-card h2 { font-size: 28px; color: #ffaa30; margin-bottom: 20px; text-shadow: 0 0 20px rgba(255,140,30,0.5); }
+    .sb-row { display: flex; justify-content: space-between; padding: 10px 15px; margin: 5px 0; border-radius: 8px; font-size: 18px; }
+    .sb-row.winner { background: rgba(255,140,40,0.15); border: 1px solid rgba(255,140,40,0.3); }
+    .sb-row .sb-name { color: rgba(255,200,140,0.9); }
+    .sb-row .sb-score { color: #ffcc55; font-weight: bold; }
+    .sb-row .sb-crown { margin-right: 5px; }
   </style>
 </head>
 <body>
   <div id="cursor-dot"></div>
   <div id="vignette"></div>
 
-  <div id="ui">
-    <button id="spin-btn">SPIN</button>
+  <!-- Lobby -->
+  <div id="lobby">
+    <div class="lobby-card">
+      <h1>Spinning Top</h1>
+      <p>A turn-based multiplayer game</p>
+      <div id="lobby-menu">
+        <button class="lobby-btn" id="create-btn">CREATE ROOM</button>
+        <button class="lobby-btn secondary" id="join-show-btn">JOIN ROOM</button>
+      </div>
+      <div id="join-section" class="hidden">
+        <input type="text" id="join-input" placeholder="Enter room code" maxlength="6">
+        <button class="lobby-btn" id="join-btn">JOIN</button>
+        <button class="lobby-btn secondary" id="back-btn">BACK</button>
+      </div>
+      <div id="room-section" class="hidden">
+        <p style="margin-bottom:5px">Room Code</p>
+        <div id="room-code-display"></div>
+        <div id="player-list"></div>
+        <button class="lobby-btn hidden" id="start-btn">START GAME</button>
+      </div>
+      <div id="lobby-status"></div>
+    </div>
   </div>
 
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="turn-info">
+      <div class="turn-label">CURRENT TURN</div>
+      <div class="turn-name" id="turn-name">-</div>
+    </div>
+    <div id="scores-panel">
+      <h3>SCORES</h3>
+      <div id="scores-list"></div>
+    </div>
+  </div>
+
+  <!-- Spin UI -->
+  <div id="ui" class="hidden">
+    <button id="spin-btn" class="hidden">SPIN</button>
+    <div id="waiting-msg" class="hidden">Waiting...</div>
+  </div>
+
+  <!-- Result -->
   <div id="result">
     <div id="result-number"></div>
     <div id="result-text">is your number</div>
-    <button id="spin-again-btn">SPIN AGAIN</button>
+    <button id="next-turn-btn" class="hidden">CONTINUE</button>
+  </div>
+
+  <!-- Scoreboard -->
+  <div id="scoreboard">
+    <div class="sb-card">
+      <h2>Round Complete!</h2>
+      <div id="sb-rows"></div>
+      <button class="lobby-btn" id="play-again-btn" style="margin-top:25px">PLAY AGAIN</button>
+    </div>
   </div>
 
   <script type="importmap">
@@ -130,22 +243,261 @@
     import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
     import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-    // ── UI References ──
-    const spinBtn = document.getElementById('spin-btn');
-    const resultDiv = document.getElementById('result');
-    const resultNumber = document.getElementById('result-number');
-    const spinAgainBtn = document.getElementById('spin-again-btn');
+    // ═══════════════════════════════════════════
+    // P2P NETWORKING (PeerJS)
+    // ═══════════════════════════════════════════
+    let peer = null;
+    let isHost = false;
+    let myId = '';
+    let myName = '';
+    let roomCode = '';
+    const connections = {};  // peerId -> DataConnection (host only)
+    let hostConn = null;     // client's connection to host
 
-    // ── Game State ──
-    let gameState = 'idle'; // idle, spinning, slowing, falling, result
-    let spinSpeed = 0;
-    let targetFallAngle = 0;   // which direction the top falls (radians)
-    let fallProgress = 0;      // 0 to 1
-    let wobbleAmount = 0.03;
-    let spinStartTime = 0;
-    let resultShown = false;
+    // Multiplayer state
+    let players = [];        // [{id, name, score, roundResult}]
+    let currentTurnIndex = 0;
+    let roundActive = false;
 
-    // ── Scene Setup ──
+    function genCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let c = '';
+      for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
+      return c;
+    }
+
+    function setStatus(msg) { document.getElementById('lobby-status').textContent = msg; }
+
+    function broadcast(msg) {
+      const data = JSON.stringify(msg);
+      if (isHost) {
+        for (const conn of Object.values(connections)) {
+          if (conn.open) conn.send(data);
+        }
+      }
+    }
+
+    function sendToHost(msg) {
+      if (hostConn && hostConn.open) hostConn.send(JSON.stringify(msg));
+    }
+
+    function handleMessage(data, fromId) {
+      const msg = typeof data === 'string' ? JSON.parse(data) : data;
+
+      switch (msg.type) {
+        case 'players':
+          players = msg.list;
+          updatePlayerList();
+          break;
+        case 'start':
+          players = msg.list;
+          currentTurnIndex = 0;
+          roundActive = true;
+          startGameUI();
+          break;
+        case 'turn':
+          currentTurnIndex = msg.turnIndex;
+          beginTurn();
+          break;
+        case 'spin':
+          // Another player spun — animate it locally
+          executeSpin(msg.spinSpeed, msg.targetFallAngle, msg.playerId);
+          break;
+        case 'result':
+          showSpinResult(msg.number, msg.playerName, msg.playerId);
+          break;
+        case 'next-turn':
+          currentTurnIndex = msg.turnIndex;
+          resultDiv.classList.remove('visible');
+          beginTurn();
+          break;
+        case 'round-end':
+          players = msg.players;
+          showScoreboard();
+          break;
+        case 'new-round':
+          players = msg.list;
+          currentTurnIndex = 0;
+          roundActive = true;
+          scoreboardDiv.classList.remove('visible');
+          resultDiv.classList.remove('visible');
+          beginTurn();
+          break;
+      }
+    }
+
+    // Host: handle new connection
+    function onHostConnection(conn) {
+      conn.on('open', () => {
+        connections[conn.peer] = conn;
+        conn.on('data', (data) => {
+          const msg = typeof data === 'string' ? JSON.parse(data) : data;
+          if (msg.type === 'join') {
+            players.push({ id: conn.peer, name: msg.name, score: 0, roundResult: null });
+            broadcast({ type: 'players', list: players });
+            // Also send to self
+            handleMessage({ type: 'players', list: players });
+          } else if (msg.type === 'spin') {
+            // Relay spin to all (including sender for confirmation, they'll handle it)
+            broadcast(msg);
+            handleMessage(msg);
+          }
+        });
+        conn.on('close', () => {
+          delete connections[conn.peer];
+          players = players.filter(p => p.id !== conn.peer);
+          broadcast({ type: 'players', list: players });
+          handleMessage({ type: 'players', list: players });
+        });
+      });
+    }
+
+    // ── Lobby UI ──
+    const lobbyDiv = document.getElementById('lobby');
+    const lobbyMenu = document.getElementById('lobby-menu');
+    const joinSection = document.getElementById('join-section');
+    const roomSection = document.getElementById('room-section');
+    const createBtn = document.getElementById('create-btn');
+    const joinShowBtn = document.getElementById('join-show-btn');
+    const joinInput = document.getElementById('join-input');
+    const joinBtn = document.getElementById('join-btn');
+    const backBtn = document.getElementById('back-btn');
+    const startBtn = document.getElementById('start-btn');
+    const roomCodeDisplay = document.getElementById('room-code-display');
+    const playerListDiv = document.getElementById('player-list');
+
+    createBtn.addEventListener('click', () => {
+      roomCode = genCode();
+      isHost = true;
+      myName = 'Player 1';
+      myId = 'spin-' + roomCode;
+      setStatus('Connecting...');
+
+      peer = new Peer(myId);
+      peer.on('open', () => {
+        players = [{ id: myId, name: myName, score: 0, roundResult: null }];
+        lobbyMenu.classList.add('hidden');
+        roomSection.classList.remove('hidden');
+        roomCodeDisplay.textContent = roomCode;
+        updatePlayerList();
+        setStatus('Waiting for players...');
+      });
+      peer.on('connection', onHostConnection);
+      peer.on('error', (err) => setStatus('Error: ' + err.type));
+    });
+
+    joinShowBtn.addEventListener('click', () => {
+      lobbyMenu.classList.add('hidden');
+      joinSection.classList.remove('hidden');
+      setStatus('');
+    });
+
+    backBtn.addEventListener('click', () => {
+      joinSection.classList.add('hidden');
+      lobbyMenu.classList.remove('hidden');
+    });
+
+    joinBtn.addEventListener('click', () => {
+      roomCode = joinInput.value.trim().toUpperCase();
+      if (roomCode.length < 3) { setStatus('Enter a valid code'); return; }
+      isHost = false;
+      setStatus('Connecting...');
+
+      peer = new Peer();
+      peer.on('open', (id) => {
+        myId = id;
+        myName = 'Player ' + (2 + Math.floor(Math.random() * 3));
+        hostConn = peer.connect('spin-' + roomCode, { reliable: true });
+        hostConn.on('open', () => {
+          sendToHost({ type: 'join', name: myName });
+          joinSection.classList.add('hidden');
+          roomSection.classList.remove('hidden');
+          roomCodeDisplay.textContent = roomCode;
+          setStatus('Connected!');
+        });
+        hostConn.on('data', (data) => handleMessage(data));
+        hostConn.on('error', () => setStatus('Connection failed'));
+      });
+      peer.on('error', (err) => setStatus('Error: ' + err.type));
+    });
+
+    function updatePlayerList() {
+      playerListDiv.innerHTML = '';
+      players.forEach((p, i) => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        div.innerHTML = `<span>${p.name}</span>${i === 0 ? '<span class="host-badge">HOST</span>' : ''}`;
+        playerListDiv.appendChild(div);
+      });
+      // Show start button for host when 2+ players
+      if (isHost && players.length >= 2) {
+        startBtn.classList.remove('hidden');
+      } else {
+        startBtn.classList.add('hidden');
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (!isHost || players.length < 2) return;
+      // Reset scores
+      players.forEach(p => { p.score = 0; p.roundResult = null; });
+      currentTurnIndex = 0;
+      roundActive = true;
+      broadcast({ type: 'start', list: players });
+      handleMessage({ type: 'start', list: players });
+    });
+
+    // ── Start Game UI ──
+    function startGameUI() {
+      lobbyDiv.classList.add('hidden');
+      document.getElementById('hud').classList.remove('hidden');
+      document.getElementById('ui').classList.remove('hidden');
+      beginTurn();
+    }
+
+    function beginTurn() {
+      resultDiv.classList.remove('visible');
+      nextTurnBtn.classList.add('hidden');
+      const cp = players[currentTurnIndex];
+      document.getElementById('turn-name').textContent = cp ? cp.name : '-';
+      updateScoresHUD();
+
+      const isMyTurn = cp && cp.id === myId;
+      if (isMyTurn) {
+        spinBtn.classList.remove('hidden');
+        waitingMsg.classList.add('hidden');
+      } else {
+        spinBtn.classList.add('hidden');
+        waitingMsg.classList.remove('hidden');
+        waitingMsg.textContent = `${cp ? cp.name : '...'} is spinning...`;
+      }
+
+      // Reset top
+      gameState = 'idle';
+      spinSpeed = 0;
+      fallProgress = 0;
+      wobbleAmount = 0.03;
+      topGroup.rotation.x = 0;
+      topGroup.rotation.z = 0;
+      topGroup.position.y = 0.05;
+      particles.visible = false;
+    }
+
+    function updateScoresHUD() {
+      const list = document.getElementById('scores-list');
+      list.innerHTML = '';
+      const cp = players[currentTurnIndex];
+      players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'score-row' + (cp && p.id === cp.id ? ' active' : '');
+        div.innerHTML = `<span>${p.name}</span><span class="score-value">${p.score}</span>`;
+        list.appendChild(div);
+      });
+    }
+
+    // ═══════════════════════════════════════════
+    // 3D SCENE
+    // ═══════════════════════════════════════════
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0a0a15, 0.018);
 
@@ -161,391 +513,263 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
-    // ── Post-processing ──
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.2, 0.5, 0.35
-    );
-    composer.addPass(bloomPass);
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.5, 0.35));
 
-    // ── Lighting (brighter environment) ──
+    // Lighting
     scene.add(new THREE.AmbientLight(0x222233, 1.5));
+    const overheadLight = new THREE.PointLight(0xffeedd, 10, 30, 1.2); overheadLight.position.set(0, 8, 0); scene.add(overheadLight);
+    const mainLight = new THREE.PointLight(0xff7020, 10, 20, 1.5); mainLight.position.set(1.5, 4, 1); scene.add(mainLight);
+    scene.add(Object.assign(new THREE.PointLight(0x3322cc, 6, 15, 1.5), { position: new THREE.Vector3(-3, 2, -1) }));
+    scene.add(Object.assign(new THREE.PointLight(0xff8040, 5, 12, 1.5), { position: new THREE.Vector3(0, 1, 4) }));
+    scene.add(Object.assign(new THREE.PointLight(0xff5010, 4, 15, 1.5), { position: new THREE.Vector3(-1, 1.5, -4) }));
+    scene.add(Object.assign(new THREE.PointLight(0xddccaa, 5, 15, 1.5), { position: new THREE.Vector3(3, 2, 2) }));
 
-    // Soft overhead light to illuminate table and numbers
-    const overheadLight = new THREE.PointLight(0xffeedd, 10, 30, 1.2);
-    overheadLight.position.set(0, 8, 0);
-    scene.add(overheadLight);
+    // Floor + Table
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.5, roughness: 0.6 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -1.5; scene.add(floor);
 
-    // Main warm key light
-    const mainLight = new THREE.PointLight(0xff7020, 10, 20, 1.5);
-    mainLight.position.set(1.5, 4, 1);
-    scene.add(mainLight);
-
-    // Blue/purple accent
-    const accentLight = new THREE.PointLight(0x3322cc, 6, 15, 1.5);
-    accentLight.position.set(-3, 2, -1);
-    scene.add(accentLight);
-
-    // Warm fill from front
-    const fillLight = new THREE.PointLight(0xff8040, 5, 12, 1.5);
-    fillLight.position.set(0, 1, 4);
-    scene.add(fillLight);
-
-    // Rim light
-    const rimLight = new THREE.PointLight(0xff5010, 4, 15, 1.5);
-    rimLight.position.set(-1, 1.5, -4);
-    scene.add(rimLight);
-
-    // Extra fill light from the side for number readability
-    const sideLight = new THREE.PointLight(0xddccaa, 5, 15, 1.5);
-    sideLight.position.set(3, 2, 2);
-    scene.add(sideLight);
-
-    // ── Floor ──
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(50, 50),
-      new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.5, roughness: 0.6 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -1.5;
-    scene.add(floor);
-
-    // ── Table ──
-    const tableGroup = new THREE.Group();
-    scene.add(tableGroup);
-
-    const tableTopMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(5, 0.1, 3.5),
-      new THREE.MeshStandardMaterial({ color: 0x3d2010, metalness: 0.15, roughness: 0.55 })
-    );
-    tableTopMesh.position.y = 0;
-    tableGroup.add(tableTopMesh);
-
+    const tableGroup = new THREE.Group(); scene.add(tableGroup);
+    tableGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 3.5), new THREE.MeshStandardMaterial({ color: 0x3d2010, metalness: 0.15, roughness: 0.55 })), { position: new THREE.Vector3(0, 0, 0) }));
     const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x1a0d04, metalness: 0.15, roughness: 0.7 });
-    for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]]) {
-      const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(lx, ly, lz);
-      tableGroup.add(leg);
-    }
+    for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]])
+      tableGroup.add(Object.assign(new THREE.Mesh(legGeo, legMat), { position: new THREE.Vector3(lx, ly, lz) }));
 
-    // ── Number Circle on Table ──
-    const NUMBER_COUNT = 12;
-    const NUMBER_RADIUS = 1.6;
+    // Numbers
+    const NUMBER_COUNT = 12, NUMBER_RADIUS = 1.6;
     const numberMeshes = [];
-
     function createNumberTexture(num) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, 128, 128);
-      // Glow circle background
-      const grd = ctx.createRadialGradient(64, 64, 10, 64, 64, 60);
-      grd.addColorStop(0, 'rgba(255, 140, 30, 0.15)');
-      grd.addColorStop(1, 'rgba(255, 100, 10, 0)');
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(64, 64, 60, 0, Math.PI * 2);
-      ctx.fill();
-      // Number text
-      ctx.font = 'bold 72px Georgia';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffcc55';
-      ctx.shadowColor = 'rgba(255, 160, 40, 1)';
-      ctx.shadowBlur = 20;
-      ctx.fillText(String(num), 64, 64);
-      return new THREE.CanvasTexture(canvas);
+      const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+      const x = c.getContext('2d'); x.clearRect(0, 0, 128, 128);
+      const g = x.createRadialGradient(64, 64, 10, 64, 64, 60);
+      g.addColorStop(0, 'rgba(255,140,30,0.15)'); g.addColorStop(1, 'rgba(255,100,10,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
+      x.font = 'bold 72px Georgia'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillStyle = '#ffcc55'; x.shadowColor = 'rgba(255,160,40,1)'; x.shadowBlur = 20;
+      x.fillText(String(num), 64, 64);
+      return new THREE.CanvasTexture(c);
     }
-
     for (let i = 0; i < NUMBER_COUNT; i++) {
-      const angle = (i / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2; // start from top
-      const tex = createNumberTexture(i + 1);
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), mat);
+      const angle = (i / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), new THREE.MeshBasicMaterial({
+        map: createNumberTexture(i + 1), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      }));
       mesh.rotation.x = -Math.PI / 2;
-      mesh.position.set(
-        Math.cos(angle) * NUMBER_RADIUS,
-        0.06,
-        Math.sin(angle) * NUMBER_RADIUS
-      );
-      mesh.userData.number = i + 1;
-      mesh.userData.angle = angle;
-      scene.add(mesh);
-      numberMeshes.push(mesh);
+      mesh.position.set(Math.cos(angle) * NUMBER_RADIUS, 0.06, Math.sin(angle) * NUMBER_RADIUS);
+      mesh.userData = { number: i + 1, angle };
+      scene.add(mesh); numberMeshes.push(mesh);
     }
 
-    // ── Spinning Top (scaled down to ~40%) ──
-    const topGroup = new THREE.Group();
-    topGroup.position.y = 0.05;
-    topGroup.scale.set(0.4, 0.4, 0.4);
-    scene.add(topGroup);
-
-    const points = [];
-    points.push(new THREE.Vector2(0, 0));
-    points.push(new THREE.Vector2(0.02, 0.05));
-    points.push(new THREE.Vector2(0.06, 0.15));
-    points.push(new THREE.Vector2(0.15, 0.35));
-    points.push(new THREE.Vector2(0.35, 0.55));
-    points.push(new THREE.Vector2(0.55, 0.7));
-    points.push(new THREE.Vector2(0.7, 0.8));
-    points.push(new THREE.Vector2(0.8, 0.88));
-    points.push(new THREE.Vector2(0.82, 0.92));
-    points.push(new THREE.Vector2(0.83, 0.95));
-    points.push(new THREE.Vector2(0.82, 0.98));
-    points.push(new THREE.Vector2(0.78, 1.02));
-    points.push(new THREE.Vector2(0.65, 1.08));
-    points.push(new THREE.Vector2(0.45, 1.15));
-    points.push(new THREE.Vector2(0.3, 1.22));
-    points.push(new THREE.Vector2(0.15, 1.4));
-    points.push(new THREE.Vector2(0.1, 1.6));
-    points.push(new THREE.Vector2(0.08, 1.9));
-    points.push(new THREE.Vector2(0.09, 2.2));
-    points.push(new THREE.Vector2(0.12, 2.5));
-    points.push(new THREE.Vector2(0.15, 2.7));
-    points.push(new THREE.Vector2(0.18, 2.85));
-    points.push(new THREE.Vector2(0.2, 2.95));
-    points.push(new THREE.Vector2(0.2, 3.05));
-    points.push(new THREE.Vector2(0.18, 3.15));
-    points.push(new THREE.Vector2(0.14, 3.25));
-    points.push(new THREE.Vector2(0.08, 3.35));
-    points.push(new THREE.Vector2(0.03, 3.45));
-    points.push(new THREE.Vector2(0, 3.5));
-
-    const topGeo = new THREE.LatheGeometry(points, 128);
+    // Spinning Top
+    const topGroup = new THREE.Group(); topGroup.position.y = 0.05; topGroup.scale.set(0.4, 0.4, 0.4); scene.add(topGroup);
+    const pts = [[0,0],[.02,.05],[.06,.15],[.15,.35],[.35,.55],[.55,.7],[.7,.8],[.8,.88],[.82,.92],[.83,.95],[.82,.98],[.78,1.02],[.65,1.08],[.45,1.15],[.3,1.22],[.15,1.4],[.1,1.6],[.08,1.9],[.09,2.2],[.12,2.5],[.15,2.7],[.18,2.85],[.2,2.95],[.2,3.05],[.18,3.15],[.14,3.25],[.08,3.35],[.03,3.45],[0,3.5]];
+    const topGeo = new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 128);
     topGeo.computeVertexNormals();
-
     const cubeRT = new THREE.WebGLCubeRenderTarget(512);
-    const cubeCamera = new THREE.CubeCamera(0.1, 100, cubeRT);
-    scene.add(cubeCamera);
+    const cubeCamera = new THREE.CubeCamera(0.1, 100, cubeRT); scene.add(cubeCamera);
+    const topMat = new THREE.MeshPhysicalMaterial({ color: 0xD4722A, metalness: 1, roughness: 0.05, envMap: cubeRT.texture, envMapIntensity: 3, clearcoat: 1, clearcoatRoughness: 0.02, reflectivity: 1, ior: 2.5 });
+    const topMesh = new THREE.Mesh(topGeo, topMat); topGroup.add(topMesh);
+    const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(0.83, 0.03, 24, 128), new THREE.MeshPhysicalMaterial({ color: 0xE88530, metalness: 1, roughness: 0.03, emissive: 0xcc6600, emissiveIntensity: 0.3, envMap: cubeRT.texture, envMapIntensity: 2.5, clearcoat: 1, clearcoatRoughness: 0.01 }));
+    ringMesh.rotation.x = Math.PI / 2; ringMesh.position.y = 0.95; topGroup.add(ringMesh);
 
-    const topMat = new THREE.MeshPhysicalMaterial({
-      color: 0xD4722A,
-      metalness: 1.0,
-      roughness: 0.05,
-      envMap: cubeRT.texture,
-      envMapIntensity: 3.0,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.02,
-      reflectivity: 1.0,
-      ior: 2.5,
-    });
-
-    const topMesh = new THREE.Mesh(topGeo, topMat);
-    topGroup.add(topMesh);
-
-    const ringMesh = new THREE.Mesh(
-      new THREE.TorusGeometry(0.83, 0.03, 24, 128),
-      new THREE.MeshPhysicalMaterial({
-        color: 0xE88530,
-        metalness: 1.0,
-        roughness: 0.03,
-        emissive: 0xcc6600,
-        emissiveIntensity: 0.3,
-        envMap: cubeRT.texture,
-        envMapIntensity: 2.5,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.01,
-      })
-    );
-    ringMesh.rotation.x = Math.PI / 2;
-    ringMesh.position.y = 0.95;
-    topGroup.add(ringMesh);
-
-    // ── Particle System ──
+    // Particles
     const PARTICLE_COUNT = 300;
     const particleGeo = new THREE.BufferGeometry();
-    const pPositions = new Float32Array(PARTICLE_COUNT * 3);
-    const pVelocities = new Float32Array(PARTICLE_COUNT * 3);
-    const pLifetimes = new Float32Array(PARTICLE_COUNT);
-    const pMaxLifetimes = new Float32Array(PARTICLE_COUNT);
-
-    function resetParticle(i) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = 0.32 + Math.random() * 0.05; // scaled to match smaller top
-      pPositions[i * 3] = Math.cos(angle) * r;
-      pPositions[i * 3 + 1] = 0.4 + Math.random() * 0.1; // lower to match scaled top
-      pPositions[i * 3 + 2] = Math.sin(angle) * r;
-      const speed = 0.5 + Math.random() * 2.5;
-      pVelocities[i * 3] = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.5;
-      pVelocities[i * 3 + 1] = 0.2 + Math.random() * 1.5;
-      pVelocities[i * 3 + 2] = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.5;
-      pMaxLifetimes[i] = 0.5 + Math.random() * 1.5;
-      pLifetimes[i] = pMaxLifetimes[i];
+    const pPos = new Float32Array(PARTICLE_COUNT * 3), pVel = new Float32Array(PARTICLE_COUNT * 3), pLife = new Float32Array(PARTICLE_COUNT), pMaxLife = new Float32Array(PARTICLE_COUNT);
+    function resetP(i) {
+      const a = Math.random() * Math.PI * 2, r = 0.32 + Math.random() * 0.05;
+      pPos[i*3] = Math.cos(a)*r; pPos[i*3+1] = 0.4+Math.random()*0.1; pPos[i*3+2] = Math.sin(a)*r;
+      const s = 0.5+Math.random()*2.5;
+      pVel[i*3] = Math.cos(a)*s+(Math.random()-0.5)*0.5; pVel[i*3+1] = 0.2+Math.random()*1.5; pVel[i*3+2] = Math.sin(a)*s+(Math.random()-0.5)*0.5;
+      pMaxLife[i] = 0.5+Math.random()*1.5; pLife[i] = pMaxLife[i];
     }
+    for (let i = 0; i < PARTICLE_COUNT; i++) { resetP(i); pLife[i] = Math.random()*pMaxLife[i]; }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const spkC = document.createElement('canvas'); spkC.width = 64; spkC.height = 64;
+    const spkX = spkC.getContext('2d'); const gr = spkX.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,200,80,1)'); gr.addColorStop(0.2,'rgba(255,140,40,0.8)'); gr.addColorStop(0.5,'rgba(255,80,10,0.3)'); gr.addColorStop(1,'rgba(255,40,0,0)');
+    spkX.fillStyle = gr; spkX.fillRect(0,0,64,64);
+    const particleMat = new THREE.PointsMaterial({ map: new THREE.CanvasTexture(spkC), size: 0.15, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xff9930 });
+    const particles = new THREE.Points(particleGeo, particleMat); scene.add(particles);
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      resetParticle(i);
-      pLifetimes[i] = Math.random() * pMaxLifetimes[i];
-    }
-
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
-
-    const sparkCanvas = document.createElement('canvas');
-    sparkCanvas.width = 64;
-    sparkCanvas.height = 64;
-    const sparkCtx = sparkCanvas.getContext('2d');
-    const grad = sparkCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255, 200, 80, 1)');
-    grad.addColorStop(0.2, 'rgba(255, 140, 40, 0.8)');
-    grad.addColorStop(0.5, 'rgba(255, 80, 10, 0.3)');
-    grad.addColorStop(1, 'rgba(255, 40, 0, 0)');
-    sparkCtx.fillStyle = grad;
-    sparkCtx.fillRect(0, 0, 64, 64);
-
-    const particleMat = new THREE.PointsMaterial({
-      map: new THREE.CanvasTexture(sparkCanvas),
-      size: 0.15,
-      sizeAttenuation: true,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      color: 0xff9930,
-    });
-
-    const particles = new THREE.Points(particleGeo, particleMat);
-    scene.add(particles);
-
-    // ── Trail Streaks ──
-    const trails = [];
-    const trailGroup = new THREE.Group();
-    scene.add(trailGroup);
-
+    // Trails
+    const trails = [], trailGroup = new THREE.Group(); scene.add(trailGroup);
     for (let i = 0; i < 40; i++) {
-      const len = 0.3 + Math.random() * 1.2;
-      const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(0.07 + Math.random() * 0.05, 1.0, 0.5 + Math.random() * 0.3),
-        transparent: true,
-        opacity: 0.4 + Math.random() * 0.5,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      const trail = new THREE.Mesh(new THREE.PlaneGeometry(0.02, len), mat);
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 2.5 + Math.random() * 5;
-      trail.position.set(Math.cos(angle) * dist, 0.3 + Math.random() * 3, Math.sin(angle) * dist);
-      trail.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-      trail.userData = { angle, dist, speed: 0.1 + Math.random() * 0.4, baseY: trail.position.y, phase: Math.random() * Math.PI * 2 };
-      trailGroup.add(trail);
-      trails.push(trail);
+      const m = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0.07+Math.random()*0.05,1,0.5+Math.random()*0.3), transparent: true, opacity: 0.4+Math.random()*0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const t = new THREE.Mesh(new THREE.PlaneGeometry(0.02, 0.3+Math.random()*1.2), m);
+      const a = Math.random()*Math.PI*2, d = 2.5+Math.random()*5;
+      t.position.set(Math.cos(a)*d, 0.3+Math.random()*3, Math.sin(a)*d);
+      t.rotation.z = a+Math.PI/2+(Math.random()-0.5)*0.5;
+      t.userData = { angle: a, dist: d, speed: 0.1+Math.random()*0.4, baseY: t.position.y, phase: Math.random()*Math.PI*2 };
+      trailGroup.add(t); trails.push(t);
     }
 
-    // ── Decorative Orbit Circles ──
-    const circleGroup = new THREE.Group();
-    circleGroup.position.set(-3.5, 3, 0);
-    scene.add(circleGroup);
+    // Orbit circles
+    const circleGroup = new THREE.Group(); circleGroup.position.set(-3.5, 3, 0); scene.add(circleGroup);
+    circleGroup.add(new THREE.Mesh(new THREE.RingGeometry(0.45,0.48,64), new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })));
+    const c2m = new THREE.Mesh(new THREE.RingGeometry(0.55,0.57,64), new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.4, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    c2m.rotation.x = 0.3; c2m.rotation.y = 0.5; circleGroup.add(c2m);
+    const orbitDot = new THREE.Mesh(new THREE.SphereGeometry(0.04,8,8), new THREE.MeshBasicMaterial({ color: 0xffaa55 })); circleGroup.add(orbitDot);
 
-    const c1 = new THREE.Mesh(
-      new THREE.RingGeometry(0.45, 0.48, 64),
-      new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
-    );
-    circleGroup.add(c1);
-
-    const c2 = new THREE.Mesh(
-      new THREE.RingGeometry(0.55, 0.57, 64),
-      new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.4, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
-    );
-    c2.rotation.x = 0.3;
-    c2.rotation.y = 0.5;
-    circleGroup.add(c2);
-
-    const orbitDot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffaa55 })
-    );
-    circleGroup.add(orbitDot);
-
-    // ── Cursor Follower ──
+    // Cursor
     const cursorDot = document.getElementById('cursor-dot');
-    document.addEventListener('mousemove', (e) => {
-      cursorDot.style.left = e.clientX + 'px';
-      cursorDot.style.top = e.clientY + 'px';
-    });
+    document.addEventListener('mousemove', e => { cursorDot.style.left = e.clientX+'px'; cursorDot.style.top = e.clientY+'px'; });
 
-    // ── Game Logic ──
-    function startSpin() {
+    // ═══════════════════════════════════════════
+    // GAME LOGIC
+    // ═══════════════════════════════════════════
+    const spinBtn = document.getElementById('spin-btn');
+    const waitingMsg = document.getElementById('waiting-msg');
+    const resultDiv = document.getElementById('result');
+    const resultNumber = document.getElementById('result-number');
+    const resultText = document.getElementById('result-text');
+    const nextTurnBtn = document.getElementById('next-turn-btn');
+    const scoreboardDiv = document.getElementById('scoreboard');
+    const sbRows = document.getElementById('sb-rows');
+    const playAgainBtn = document.getElementById('play-again-btn');
+
+    let gameState = 'idle';
+    let spinSpeed = 0, targetFallAngle = 0, fallProgress = 0, wobbleAmount = 0.03, spinStartTime = 0, resultShown = false;
+    let currentSpinPlayerId = '';
+
+    function executeSpin(speed, angle, playerId) {
       gameState = 'spinning';
-      spinSpeed = 12 + Math.random() * 6; // 12-18 rad/s
+      spinSpeed = speed;
+      targetFallAngle = angle;
       wobbleAmount = 0.02;
       fallProgress = 0;
       resultShown = false;
       spinStartTime = clock.getElapsedTime();
+      currentSpinPlayerId = playerId;
 
-      // Pick random target number (1-12) and its angle
-      const targetNum = Math.floor(Math.random() * 12);
-      targetFallAngle = (targetNum / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2;
-
-      // Reset top upright
       topGroup.position.y = 0.05;
       topGroup.rotation.x = 0;
       topGroup.rotation.z = 0;
 
-      // Hide UI
       spinBtn.classList.add('hidden');
+      waitingMsg.classList.add('hidden');
       resultDiv.classList.remove('visible');
-
-      // Show particles
       particles.visible = true;
     }
 
-    function resetGame() {
-      gameState = 'idle';
-      spinSpeed = 0;
-      fallProgress = 0;
-      wobbleAmount = 0.03;
-      topGroup.rotation.x = 0;
-      topGroup.rotation.z = 0;
-      topGroup.position.y = 0.05;
+    spinBtn.addEventListener('click', () => {
+      const speed = 12 + Math.random() * 6;
+      const targetNum = Math.floor(Math.random() * 12);
+      const angle = (targetNum / NUMBER_COUNT) * Math.PI * 2 - Math.PI / 2;
 
-      resultDiv.classList.remove('visible');
-      spinBtn.classList.remove('hidden');
-      particles.visible = true;
-    }
+      const msg = { type: 'spin', spinSpeed: speed, targetFallAngle: angle, playerId: myId };
+      if (isHost) {
+        broadcast(msg);
+        handleMessage(msg);
+      } else {
+        sendToHost(msg);
+        // Host will relay back — but also play locally immediately
+        executeSpin(speed, angle, myId);
+      }
+    });
 
     function getResultNumber() {
-      // The top falls toward targetFallAngle, find closest number
-      let bestDist = Infinity;
-      let bestNum = 1;
+      let best = Infinity, num = 1;
       for (const nm of numberMeshes) {
-        let diff = Math.abs(nm.userData.angle - targetFallAngle);
-        if (diff > Math.PI) diff = Math.PI * 2 - diff;
-        if (diff < bestDist) {
-          bestDist = diff;
-          bestNum = nm.userData.number;
-        }
+        let d = Math.abs(nm.userData.angle - targetFallAngle);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        if (d < best) { best = d; num = nm.userData.number; }
       }
-      return bestNum;
+      return num;
     }
 
-    function showResult() {
+    function showSpinResult(number, playerName, playerId) {
+      // Update player's round result
+      const p = players.find(p => p.id === playerId);
+      if (p) { p.roundResult = number; p.score += number; }
+      updateScoresHUD();
+
+      resultNumber.textContent = number;
+      resultText.textContent = playerName + ' got ' + number;
+      resultDiv.classList.add('visible');
+
+      // Show continue button only for host
+      if (isHost) {
+        nextTurnBtn.classList.remove('hidden');
+      }
+    }
+
+    function onSpinComplete() {
       if (resultShown) return;
       resultShown = true;
       const num = getResultNumber();
-      resultNumber.textContent = num;
-      resultDiv.classList.add('visible');
+      const player = players.find(p => p.id === currentSpinPlayerId);
+      const playerName = player ? player.name : 'Player';
+
+      if (isHost) {
+        // Broadcast result
+        const msg = { type: 'result', number: num, playerName, playerId: currentSpinPlayerId };
+        broadcast(msg);
+        showSpinResult(num, playerName, currentSpinPlayerId);
+      } else {
+        // Client just shows locally — host will send authoritative result
+        showSpinResult(num, playerName, currentSpinPlayerId);
+      }
     }
 
-    spinBtn.addEventListener('click', startSpin);
-    spinAgainBtn.addEventListener('click', resetGame);
+    nextTurnBtn.addEventListener('click', () => {
+      if (!isHost) return;
+      // Check if all players have spun this round
+      const allSpun = players.every(p => p.roundResult !== null);
+      if (allSpun) {
+        // Round end
+        broadcast({ type: 'round-end', players });
+        showScoreboard();
+      } else {
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+        // Skip players who already spun
+        while (players[currentTurnIndex].roundResult !== null) {
+          currentTurnIndex = (currentTurnIndex + 1) % players.length;
+        }
+        const msg = { type: 'next-turn', turnIndex: currentTurnIndex };
+        broadcast(msg);
+        resultDiv.classList.remove('visible');
+        beginTurn();
+      }
+    });
 
+    function showScoreboard() {
+      sbRows.innerHTML = '';
+      const sorted = [...players].sort((a, b) => b.score - a.score);
+      const maxScore = sorted[0].score;
+      sorted.forEach(p => {
+        const isWinner = p.score === maxScore;
+        const div = document.createElement('div');
+        div.className = 'sb-row' + (isWinner ? ' winner' : '');
+        div.innerHTML = `<span class="sb-name">${isWinner ? '<span class="sb-crown">&#9733;</span>' : ''}${p.name} (got ${p.roundResult})</span><span class="sb-score">${p.score}</span>`;
+        sbRows.appendChild(div);
+      });
+      scoreboardDiv.classList.add('visible');
+      resultDiv.classList.remove('visible');
 
-    // ── Camera targets ──
+      // Only host can start new round
+      playAgainBtn.style.display = isHost ? 'block' : 'none';
+    }
+
+    playAgainBtn.addEventListener('click', () => {
+      if (!isHost) return;
+      players.forEach(p => p.roundResult = null);
+      currentTurnIndex = 0;
+      const msg = { type: 'new-round', list: players };
+      broadcast(msg);
+      scoreboardDiv.classList.remove('visible');
+      beginTurn();
+    });
+
+    // ═══════════════════════════════════════════
+    // ANIMATION LOOP
+    // ═══════════════════════════════════════════
     const camIdlePos = new THREE.Vector3(0, 6, 7);
     const camSpinPos = new THREE.Vector3(0, 8, 5);
     const camTarget = new THREE.Vector3();
     const camCurrentPos = new THREE.Vector3().copy(camIdlePos);
-
-    // ── Animation Loop ──
     const clock = new THREE.Clock();
     let envUpdateCounter = 0;
 
@@ -554,149 +778,85 @@
       const dt = Math.min(clock.getDelta(), 0.05);
       const elapsed = clock.getElapsedTime();
 
-      // ── Game State Machine ──
       if (gameState === 'idle') {
-        // Gentle idle wobble, no spin
         topGroup.rotation.y += 0.3 * dt;
         topGroup.rotation.x = Math.sin(elapsed * 0.8) * wobbleAmount;
         topGroup.rotation.z = Math.cos(elapsed * 1.1) * wobbleAmount;
         camTarget.copy(camIdlePos);
         particles.visible = false;
-
       } else if (gameState === 'spinning') {
-        // Fast spin, minimal wobble
         topGroup.rotation.y += spinSpeed * dt;
         topGroup.rotation.x = Math.sin(elapsed * 2) * 0.01;
         topGroup.rotation.z = Math.cos(elapsed * 2.5) * 0.01;
         camTarget.copy(camSpinPos);
-
-        // After 1.5s of full speed, start slowing
-        if (elapsed - spinStartTime > 1.5) {
-          gameState = 'slowing';
-        }
-
+        if (elapsed - spinStartTime > 1.5) gameState = 'slowing';
       } else if (gameState === 'slowing') {
-        // Decelerate with strong friction
-        spinSpeed *= Math.pow(0.3, dt); // exponential decay, halves in ~1s
+        spinSpeed *= Math.pow(0.3, dt);
         topGroup.rotation.y += spinSpeed * dt;
-
-        // Wobble increases as speed decreases
-        const slowRatio = Math.max(0, 1 - spinSpeed / 12);
-        wobbleAmount = 0.02 + slowRatio * 0.18;
+        const sr = Math.max(0, 1 - spinSpeed / 12);
+        wobbleAmount = 0.02 + sr * 0.18;
         topGroup.rotation.x = Math.sin(elapsed * 1.5) * wobbleAmount;
         topGroup.rotation.z = Math.cos(elapsed * 2.0) * wobbleAmount;
-
         camTarget.copy(camSpinPos);
-
-        // Transition to falling when slow enough
-        if (spinSpeed < 1.0) {
-          gameState = 'falling';
-          fallProgress = 0;
-        }
-
+        if (spinSpeed < 1.0) { gameState = 'falling'; fallProgress = 0; }
       } else if (gameState === 'falling') {
-        // Top tilts and falls toward targetFallAngle
-        fallProgress += dt * 1.0; // takes ~1s to fall
+        fallProgress += dt * 1.0;
         fallProgress = Math.min(fallProgress, 1);
-
-        // Ease-in for fall (accelerating tilt)
         const eased = fallProgress * fallProgress;
-        const tiltAmount = eased * (Math.PI / 3.5); // ~51 degrees
-
-        // Apply tilt in the direction of targetFallAngle
-        topGroup.rotation.x = Math.sin(targetFallAngle) * tiltAmount;
-        topGroup.rotation.z = -Math.cos(targetFallAngle) * tiltAmount;
-
-        // Slow residual spin
+        const tilt = eased * (Math.PI / 3.5);
+        topGroup.rotation.x = Math.sin(targetFallAngle) * tilt;
+        topGroup.rotation.z = -Math.cos(targetFallAngle) * tilt;
         topGroup.rotation.y += spinSpeed * dt * (1 - fallProgress);
         spinSpeed *= 0.95;
-
-        // Lower the top slightly as it falls
         topGroup.position.y = 0.05 - eased * 0.25;
-
-        // Camera follows the fall direction
-        const fallDirX = Math.cos(targetFallAngle) * 3;
-        const fallDirZ = Math.sin(targetFallAngle) * 3;
-        camTarget.set(fallDirX + 1, 5, fallDirZ + 5);
-
+        camTarget.set(Math.cos(targetFallAngle) * 3 + 1, 5, Math.sin(targetFallAngle) * 3 + 5);
         particles.visible = false;
-
-        if (fallProgress >= 1) {
-          gameState = 'result';
-          showResult();
-        }
-
+        if (fallProgress >= 1) { gameState = 'result'; onSpinComplete(); }
       } else if (gameState === 'result') {
-        // Hold position
-        const fallDirX = Math.cos(targetFallAngle) * 2;
-        const fallDirZ = Math.sin(targetFallAngle) * 2;
-        camTarget.set(fallDirX + 0.5, 5, fallDirZ + 5);
+        camTarget.set(Math.cos(targetFallAngle) * 2 + 0.5, 5, Math.sin(targetFallAngle) * 2 + 5);
       }
 
-      // ── Smooth Camera ──
       camCurrentPos.lerp(camTarget, dt * 2);
       camera.position.copy(camCurrentPos);
       camera.lookAt(0, 1, 0);
-
-      // ── Light flicker ──
       mainLight.intensity = 12 + Math.sin(elapsed * 3) * 2;
 
-      // ── Particles ──
       if (particles.visible) {
-        const posAttr = particleGeo.getAttribute('position');
+        const pa = particleGeo.getAttribute('position');
         for (let i = 0; i < PARTICLE_COUNT; i++) {
-          pLifetimes[i] -= dt;
-          if (pLifetimes[i] <= 0) {
-            resetParticle(i);
-          } else {
-            pPositions[i * 3] += pVelocities[i * 3] * dt;
-            pPositions[i * 3 + 1] += pVelocities[i * 3 + 1] * dt;
-            pPositions[i * 3 + 2] += pVelocities[i * 3 + 2] * dt;
-            pVelocities[i * 3 + 1] -= 2.0 * dt;
-          }
+          pLife[i] -= dt;
+          if (pLife[i] <= 0) resetP(i);
+          else { pPos[i*3] += pVel[i*3]*dt; pPos[i*3+1] += pVel[i*3+1]*dt; pPos[i*3+2] += pVel[i*3+2]*dt; pVel[i*3+1] -= 2*dt; }
         }
-        posAttr.needsUpdate = true;
+        pa.needsUpdate = true;
       }
 
-      // ── Trail streaks ──
-      for (const trail of trails) {
-        const d = trail.userData;
-        d.angle += d.speed * dt;
-        trail.position.x = Math.cos(d.angle) * d.dist;
-        trail.position.z = Math.sin(d.angle) * d.dist;
-        trail.position.y = d.baseY + Math.sin(elapsed + d.phase) * 0.3;
-        trail.rotation.z = d.angle + Math.PI / 2;
-        trail.material.opacity = 0.3 + Math.sin(elapsed * 2 + d.phase) * 0.3;
+      for (const t of trails) {
+        const d = t.userData; d.angle += d.speed*dt;
+        t.position.x = Math.cos(d.angle)*d.dist; t.position.z = Math.sin(d.angle)*d.dist;
+        t.position.y = d.baseY+Math.sin(elapsed+d.phase)*0.3;
+        t.rotation.z = d.angle+Math.PI/2;
+        t.material.opacity = 0.3+Math.sin(elapsed*2+d.phase)*0.3;
       }
 
-      // ── Orbit circles ──
       circleGroup.rotation.z = elapsed * 0.3;
-      orbitDot.position.x = Math.cos(elapsed * 1.2) * 0.46;
-      orbitDot.position.y = Math.sin(elapsed * 1.2) * 0.46;
+      orbitDot.position.x = Math.cos(elapsed*1.2)*0.46;
+      orbitDot.position.y = Math.sin(elapsed*1.2)*0.46;
 
-      // ── Number glow pulse ──
-      for (const nm of numberMeshes) {
-        nm.material.opacity = 0.7 + Math.sin(elapsed * 1.5 + nm.userData.number) * 0.3;
-      }
+      for (const nm of numberMeshes) nm.material.opacity = 0.7+Math.sin(elapsed*1.5+nm.userData.number)*0.3;
 
-      // ── Env map update ──
       envUpdateCounter++;
       if (envUpdateCounter % 10 === 0) {
-        topMesh.visible = false;
-        ringMesh.visible = false;
-        cubeCamera.position.copy(topGroup.position);
-        cubeCamera.position.y = 1.5;
+        topMesh.visible = false; ringMesh.visible = false;
+        cubeCamera.position.copy(topGroup.position); cubeCamera.position.y = 1.5;
         cubeCamera.update(renderer, scene);
-        topMesh.visible = true;
-        ringMesh.visible = true;
+        topMesh.visible = true; ringMesh.visible = true;
       }
 
       composer.render();
     }
-
     animate();
 
-    // ── Resize ──
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
