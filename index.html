@@ -242,7 +242,7 @@
     import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
     // ═══════════════════════════════════════════
-    // UI REFERENCES (must be before any function that uses them)
+    // UI REFERENCES + GAME STATE (must be before any function that uses them)
     // ═══════════════════════════════════════════
     const spinBtn = document.getElementById('spin-btn');
     const waitingMsg = document.getElementById('waiting-msg');
@@ -253,6 +253,11 @@
     const scoreboardDiv = document.getElementById('scoreboard');
     const sbRows = document.getElementById('sb-rows');
     const playAgainBtn = document.getElementById('play-again-btn');
+
+    // Game state variables
+    let gameState = 'idle';
+    let spinSpeed = 0, targetFallAngle = 0, fallProgress = 0, wobbleAmount = 0.03, spinStartTime = 0, resultShown = false;
+    let currentSpinPlayerId = '';
 
     // ═══════════════════════════════════════════
     // P2P NETWORKING (PeerJS)
@@ -557,7 +562,7 @@
     const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x1a0d04, metalness: 0.15, roughness: 0.7 });
     for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]])
-      tableGroup.add(Object.assign(new THREE.Mesh(legGeo, legMat), { position: new THREE.Vector3(lx, ly, lz) }));
+      const leg = new THREE.Mesh(legGeo, legMat); leg.position.set(lx, ly, lz); tableGroup.add(leg);
 
     // Numbers
     const NUMBER_COUNT = 12, NUMBER_RADIUS = 1.6;
@@ -640,12 +645,8 @@
     document.addEventListener('mousemove', e => { cursorDot.style.left = e.clientX+'px'; cursorDot.style.top = e.clientY+'px'; });
 
     // ═══════════════════════════════════════════
-    // GAME LOGIC (UI refs already declared at top)
+    // GAME LOGIC (UI refs + state declared at top)
     // ═══════════════════════════════════════════
-
-    let gameState = 'idle';
-    let spinSpeed = 0, targetFallAngle = 0, fallProgress = 0, wobbleAmount = 0.03, spinStartTime = 0, resultShown = false;
-    let currentSpinPlayerId = '';
 
     function executeSpin(speed, angle, playerId) {
       gameState = 'spinning';
