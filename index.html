@@ -147,7 +147,7 @@
 
     // ── Scene Setup ──
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000508, 0.025);
+    scene.fog = new THREE.FogExp2(0x0a0a15, 0.018);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 6, 7);
@@ -157,7 +157,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.4;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
@@ -170,33 +170,43 @@
     );
     composer.addPass(bloomPass);
 
-    // ── Lighting ──
-    scene.add(new THREE.AmbientLight(0x0a0a18, 0.5));
+    // ── Lighting (brighter environment) ──
+    scene.add(new THREE.AmbientLight(0x222233, 1.5));
 
-    const mainLight = new THREE.PointLight(0xff7020, 12, 20, 1.5);
+    // Soft overhead light to illuminate table and numbers
+    const overheadLight = new THREE.PointLight(0xffeedd, 10, 30, 1.2);
+    overheadLight.position.set(0, 8, 0);
+    scene.add(overheadLight);
+
+    // Main warm key light
+    const mainLight = new THREE.PointLight(0xff7020, 10, 20, 1.5);
     mainLight.position.set(1.5, 4, 1);
     scene.add(mainLight);
 
-    const accentLight = new THREE.PointLight(0x3322cc, 8, 15, 1.5);
+    // Blue/purple accent
+    const accentLight = new THREE.PointLight(0x3322cc, 6, 15, 1.5);
     accentLight.position.set(-3, 2, -1);
     scene.add(accentLight);
 
-    const fillLight = new THREE.PointLight(0xff8040, 6, 12, 1.5);
-    fillLight.position.set(0, 0.5, 3);
+    // Warm fill from front
+    const fillLight = new THREE.PointLight(0xff8040, 5, 12, 1.5);
+    fillLight.position.set(0, 1, 4);
     scene.add(fillLight);
 
-    const rimLight = new THREE.PointLight(0xff5010, 5, 15, 1.5);
+    // Rim light
+    const rimLight = new THREE.PointLight(0xff5010, 4, 15, 1.5);
     rimLight.position.set(-1, 1.5, -4);
     scene.add(rimLight);
 
-    const topLight = new THREE.PointLight(0xffaa60, 4, 10, 2);
-    topLight.position.set(0, 6, 0);
-    scene.add(topLight);
+    // Extra fill light from the side for number readability
+    const sideLight = new THREE.PointLight(0xddccaa, 5, 15, 1.5);
+    sideLight.position.set(3, 2, 2);
+    scene.add(sideLight);
 
     // ── Floor ──
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(50, 50),
-      new THREE.MeshStandardMaterial({ color: 0x050508, metalness: 0.6, roughness: 0.5 })
+      new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.5, roughness: 0.6 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1.5;
@@ -208,7 +218,7 @@
 
     const tableTopMesh = new THREE.Mesh(
       new THREE.BoxGeometry(5, 0.1, 3.5),
-      new THREE.MeshStandardMaterial({ color: 0x2a1506, metalness: 0.1, roughness: 0.65 })
+      new THREE.MeshStandardMaterial({ color: 0x3d2010, metalness: 0.15, roughness: 0.55 })
     );
     tableTopMesh.position.y = 0;
     tableGroup.add(tableTopMesh);
@@ -244,9 +254,9 @@
       ctx.font = 'bold 72px Georgia';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffaa30';
-      ctx.shadowColor = 'rgba(255, 120, 20, 0.8)';
-      ctx.shadowBlur = 15;
+      ctx.fillStyle = '#ffcc55';
+      ctx.shadowColor = 'rgba(255, 160, 40, 1)';
+      ctx.shadowBlur = 20;
       ctx.fillText(String(num), 64, 64);
       return new THREE.CanvasTexture(canvas);
     }
@@ -261,7 +271,7 @@
         depthWrite: false,
         side: THREE.DoubleSide,
       });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.45), mat);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), mat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(
         Math.cos(angle) * NUMBER_RADIUS,
@@ -274,9 +284,10 @@
       numberMeshes.push(mesh);
     }
 
-    // ── Spinning Top ──
+    // ── Spinning Top (scaled down to ~40%) ──
     const topGroup = new THREE.Group();
     topGroup.position.y = 0.05;
+    topGroup.scale.set(0.4, 0.4, 0.4);
     scene.add(topGroup);
 
     const points = [];
@@ -360,9 +371,9 @@
 
     function resetParticle(i) {
       const angle = Math.random() * Math.PI * 2;
-      const r = 0.8 + Math.random() * 0.1;
+      const r = 0.32 + Math.random() * 0.05; // scaled to match smaller top
       pPositions[i * 3] = Math.cos(angle) * r;
-      pPositions[i * 3 + 1] = 0.9 + Math.random() * 0.2;
+      pPositions[i * 3 + 1] = 0.4 + Math.random() * 0.1; // lower to match scaled top
       pPositions[i * 3 + 2] = Math.sin(angle) * r;
       const speed = 0.5 + Math.random() * 2.5;
       pVelocities[i * 3] = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.5;
@@ -601,7 +612,7 @@
         spinSpeed *= 0.95;
 
         // Lower the top slightly as it falls
-        topGroup.position.y = 0.05 - eased * 0.6;
+        topGroup.position.y = 0.05 - eased * 0.25;
 
         // Camera follows the fall direction
         const fallDirX = Math.cos(targetFallAngle) * 3;
