@@ -8,7 +8,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: 'Georgia', serif; color: #fff; }
-    canvas { display: block; }
+    canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
     .hidden { display: none !important; }
     #cursor-dot {
       position: fixed; width: 8px; height: 8px;
@@ -128,10 +128,9 @@
     /* ── Result ── */
     #result {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      z-index: 20; text-align: center; opacity: 0; transition: opacity 0.8s;
-      pointer-events: none;
+      z-index: 20; text-align: center; display: none;
     }
-    #result.visible { opacity: 1; pointer-events: auto; }
+    #result.visible { display: block; }
     #result-number { font-size: 120px; font-weight: bold; color: #ffaa30; text-shadow: 0 0 40px rgba(255,140,30,0.8); line-height: 1; }
     #result-text { font-size: 24px; color: rgba(255,200,140,0.9); margin-top: 10px; letter-spacing: 2px; }
     #next-turn-btn {
@@ -148,11 +147,10 @@
     /* ── Scoreboard ── */
     #scoreboard {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 40; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.85); opacity: 0; transition: opacity 0.5s;
-      pointer-events: none;
+      z-index: 40; display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85);
     }
-    #scoreboard.visible { opacity: 1; pointer-events: auto; }
+    #scoreboard.visible { display: flex; }
     .sb-card {
       background: linear-gradient(145deg, rgba(40,20,10,0.95), rgba(20,10,5,0.98));
       border: 1px solid rgba(255,140,40,0.3); border-radius: 20px;
