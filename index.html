@@ -87,20 +87,56 @@
     rimLight.position.set(2, 1, -3);
     scene.add(rimLight);
 
-    // ── Ground Plane ──
-    const groundGeo = new THREE.PlaneGeometry(40, 40);
-    const groundMat = new THREE.MeshStandardMaterial({
+    // ── Floor ──
+    const floorGeo = new THREE.PlaneGeometry(50, 50);
+    const floorMat = new THREE.MeshStandardMaterial({
       color: 0x050508,
-      metalness: 0.95,
-      roughness: 0.3,
+      metalness: 0.6,
+      roughness: 0.5,
     });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = 0;
-    scene.add(ground);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.5;
+    scene.add(floor);
+
+    // ── Table ──
+    const tableGroup = new THREE.Group();
+    scene.add(tableGroup);
+
+    // Table top
+    const tableTopGeo = new THREE.BoxGeometry(5, 0.1, 3.5);
+    const tableTopMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1506,
+      metalness: 0.1,
+      roughness: 0.65,
+    });
+    const tableTop = new THREE.Mesh(tableTopGeo, tableTopMat);
+    tableTop.position.y = 0;
+    tableTop.receiveShadow = true;
+    tableGroup.add(tableTop);
+
+    // Table legs
+    const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
+    const legMat = new THREE.MeshStandardMaterial({
+      color: 0x1a0d04,
+      metalness: 0.15,
+      roughness: 0.7,
+    });
+    const legPositions = [
+      [-2.3, -0.75, -1.5],
+      [2.3, -0.75, -1.5],
+      [-2.3, -0.75, 1.5],
+      [2.3, -0.75, 1.5],
+    ];
+    for (const [lx, ly, lz] of legPositions) {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(lx, ly, lz);
+      tableGroup.add(leg);
+    }
 
     // ── Spinning Top Geometry (LatheGeometry) ──
     const topGroup = new THREE.Group();
+    topGroup.position.y = 0.05; // sit on table surface
     scene.add(topGroup);
 
     // Profile points for the spinning top silhouette
@@ -145,10 +181,10 @@
 
     const topGeo = new THREE.LatheGeometry(points, 64);
     const topMat = new THREE.MeshStandardMaterial({
-      color: 0xcc6620,
-      metalness: 0.92,
-      roughness: 0.15,
-      envMapIntensity: 2.0,
+      color: 0xFFD700,
+      metalness: 1.0,
+      roughness: 0.08,
+      envMapIntensity: 2.5,
     });
 
     // Create a simple environment map for reflections
@@ -164,11 +200,12 @@
     // Disc ring detail - a torus at the widest part
     const ringGeo = new THREE.TorusGeometry(0.83, 0.025, 16, 64);
     const ringMat = new THREE.MeshStandardMaterial({
-      color: 0xffaa44,
+      color: 0xFFD700,
       metalness: 1.0,
-      roughness: 0.1,
-      emissive: 0xff6600,
-      emissiveIntensity: 0.3,
+      roughness: 0.05,
+      emissive: 0xaa8800,
+      emissiveIntensity: 0.4,
+      envMap: cubeRT.texture,
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI / 2;
