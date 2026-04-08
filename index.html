@@ -497,32 +497,42 @@
     // 3D SCENE
     // ═══════════════════════════════════════════
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0a15, 0.018);
+    scene.background = new THREE.Color(0x0a0a15);
+    scene.fog = new THREE.FogExp2(0x0a0a15, 0.015);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 6, 7);
     camera.lookAt(0, 1, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.4;
+    renderer.toneMappingExposure = 1.6;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.5, 0.35));
+    // Use direct rendering (no post-processing) for reliability
+    // EffectComposer + bloom can fail on some GPUs
+    let useComposer = true;
+    let composer;
+    try {
+      composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.5, 0.4));
+    } catch (e) {
+      console.warn('EffectComposer failed, falling back to direct render:', e);
+      useComposer = false;
+    }
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0x222233, 1.5));
-    const overheadLight = new THREE.PointLight(0xffeedd, 10, 30, 1.2); overheadLight.position.set(0, 8, 0); scene.add(overheadLight);
-    const mainLight = new THREE.PointLight(0xff7020, 10, 20, 1.5); mainLight.position.set(1.5, 4, 1); scene.add(mainLight);
-    scene.add(Object.assign(new THREE.PointLight(0x3322cc, 6, 15, 1.5), { position: new THREE.Vector3(-3, 2, -1) }));
-    scene.add(Object.assign(new THREE.PointLight(0xff8040, 5, 12, 1.5), { position: new THREE.Vector3(0, 1, 4) }));
-    scene.add(Object.assign(new THREE.PointLight(0xff5010, 4, 15, 1.5), { position: new THREE.Vector3(-1, 1.5, -4) }));
-    scene.add(Object.assign(new THREE.PointLight(0xddccaa, 5, 15, 1.5), { position: new THREE.Vector3(3, 2, 2) }));
+    // Lighting — use NO distance decay for reliable brightness
+    scene.add(new THREE.AmbientLight(0x334455, 2.0));
+    const overheadLight = new THREE.PointLight(0xffeedd, 15, 0, 0); overheadLight.position.set(0, 8, 0); scene.add(overheadLight);
+    const mainLight = new THREE.PointLight(0xff7020, 12, 0, 0); mainLight.position.set(1.5, 4, 1); scene.add(mainLight);
+    scene.add(Object.assign(new THREE.PointLight(0x3322cc, 8, 0, 0), { position: new THREE.Vector3(-3, 2, -1) }));
+    scene.add(Object.assign(new THREE.PointLight(0xff8040, 8, 0, 0), { position: new THREE.Vector3(0, 1, 4) }));
+    scene.add(Object.assign(new THREE.PointLight(0xff5010, 6, 0, 0), { position: new THREE.Vector3(-1, 1.5, -4) }));
+    scene.add(Object.assign(new THREE.PointLight(0xddccaa, 8, 0, 0), { position: new THREE.Vector3(3, 2, 2) }));
 
     // Floor + Table
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.5, roughness: 0.6 }));
@@ -817,7 +827,7 @@
       camCurrentPos.lerp(camTarget, dt * 2);
       camera.position.copy(camCurrentPos);
       camera.lookAt(0, 1, 0);
-      mainLight.intensity = 12 + Math.sin(elapsed * 3) * 2;
+      mainLight.intensity = 12 + Math.sin(elapsed * 3) * 3;
 
       if (particles.visible) {
         const pa = particleGeo.getAttribute('position');
@@ -851,7 +861,11 @@
         topMesh.visible = true; ringMesh.visible = true;
       }
 
-      composer.render();
+      if (useComposer) {
+        try { composer.render(); } catch(e) { useComposer = false; }
+      } else {
+        renderer.render(scene, camera);
+      }
     }
     animate();
 
@@ -859,7 +873,7 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight);
+      if (useComposer && composer) composer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>
 </body>
