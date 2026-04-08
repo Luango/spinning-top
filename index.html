@@ -242,6 +242,19 @@
     import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
     // ═══════════════════════════════════════════
+    // UI REFERENCES (must be before any function that uses them)
+    // ═══════════════════════════════════════════
+    const spinBtn = document.getElementById('spin-btn');
+    const waitingMsg = document.getElementById('waiting-msg');
+    const resultDiv = document.getElementById('result');
+    const resultNumber = document.getElementById('result-number');
+    const resultText = document.getElementById('result-text');
+    const nextTurnBtn = document.getElementById('next-turn-btn');
+    const scoreboardDiv = document.getElementById('scoreboard');
+    const sbRows = document.getElementById('sb-rows');
+    const playAgainBtn = document.getElementById('play-again-btn');
+
+    // ═══════════════════════════════════════════
     // P2P NETWORKING (PeerJS)
     // ═══════════════════════════════════════════
     let peer = null;
@@ -529,17 +542,18 @@
     scene.add(new THREE.AmbientLight(0x334455, 2.0));
     const overheadLight = new THREE.PointLight(0xffeedd, 15, 0, 0); overheadLight.position.set(0, 8, 0); scene.add(overheadLight);
     const mainLight = new THREE.PointLight(0xff7020, 12, 0, 0); mainLight.position.set(1.5, 4, 1); scene.add(mainLight);
-    scene.add(Object.assign(new THREE.PointLight(0x3322cc, 8, 0, 0), { position: new THREE.Vector3(-3, 2, -1) }));
-    scene.add(Object.assign(new THREE.PointLight(0xff8040, 8, 0, 0), { position: new THREE.Vector3(0, 1, 4) }));
-    scene.add(Object.assign(new THREE.PointLight(0xff5010, 6, 0, 0), { position: new THREE.Vector3(-1, 1.5, -4) }));
-    scene.add(Object.assign(new THREE.PointLight(0xddccaa, 8, 0, 0), { position: new THREE.Vector3(3, 2, 2) }));
+    const l1 = new THREE.PointLight(0x3322cc, 8, 0, 0); l1.position.set(-3, 2, -1); scene.add(l1);
+    const l2 = new THREE.PointLight(0xff8040, 8, 0, 0); l2.position.set(0, 1, 4); scene.add(l2);
+    const l3 = new THREE.PointLight(0xff5010, 6, 0, 0); l3.position.set(-1, 1.5, -4); scene.add(l3);
+    const l4 = new THREE.PointLight(0xddccaa, 8, 0, 0); l4.position.set(3, 2, 2); scene.add(l4);
 
     // Floor + Table
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.5, roughness: 0.6 }));
     floor.rotation.x = -Math.PI / 2; floor.position.y = -1.5; scene.add(floor);
 
     const tableGroup = new THREE.Group(); scene.add(tableGroup);
-    tableGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 3.5), new THREE.MeshStandardMaterial({ color: 0x3d2010, metalness: 0.15, roughness: 0.55 })), { position: new THREE.Vector3(0, 0, 0) }));
+    const tableMesh = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 3.5), new THREE.MeshStandardMaterial({ color: 0x3d2010, metalness: 0.15, roughness: 0.55 }));
+    tableMesh.position.set(0, 0, 0); tableGroup.add(tableMesh);
     const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 12);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x1a0d04, metalness: 0.15, roughness: 0.7 });
     for (const [lx, ly, lz] of [[-2.3,-0.75,-1.5],[2.3,-0.75,-1.5],[-2.3,-0.75,1.5],[2.3,-0.75,1.5]])
@@ -626,17 +640,8 @@
     document.addEventListener('mousemove', e => { cursorDot.style.left = e.clientX+'px'; cursorDot.style.top = e.clientY+'px'; });
 
     // ═══════════════════════════════════════════
-    // GAME LOGIC
+    // GAME LOGIC (UI refs already declared at top)
     // ═══════════════════════════════════════════
-    const spinBtn = document.getElementById('spin-btn');
-    const waitingMsg = document.getElementById('waiting-msg');
-    const resultDiv = document.getElementById('result');
-    const resultNumber = document.getElementById('result-number');
-    const resultText = document.getElementById('result-text');
-    const nextTurnBtn = document.getElementById('next-turn-btn');
-    const scoreboardDiv = document.getElementById('scoreboard');
-    const sbRows = document.getElementById('sb-rows');
-    const playAgainBtn = document.getElementById('play-again-btn');
 
     let gameState = 'idle';
     let spinSpeed = 0, targetFallAngle = 0, fallProgress = 0, wobbleAmount = 0.03, spinStartTime = 0, resultShown = false;
